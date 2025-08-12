@@ -292,11 +292,15 @@ class Slime {
         break;
       }
       case 'arrow': {
+        // A more detailed shape with a distinct head and body
         let points = [
-          createVector(this.r, 0), // Tip
-          createVector(-this.r, this.r), // Wing back right
-          createVector(-this.r * 0.5, 0), // Tail middle
-          createVector(-this.r, -this.r) // Wing back left
+          createVector(this.r * 1.3, 0),             // Tip
+          createVector(0, -this.r),                  // Right head corner
+          createVector(-this.r * 0.4, -this.r * 0.5),  // Right neck
+          createVector(-this.r * 0.8, -this.r * 0.5),  // Right tail
+          createVector(-this.r * 0.8, this.r * 0.5),   // Left tail
+          createVector(-this.r * 0.4, this.r * 0.5),   // Left neck
+          createVector(0, this.r)                    // Left head corner
         ];
 
         points.forEach(p => {
@@ -304,10 +308,13 @@ class Slime {
           p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 400), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
         });
 
-        // Using vertex for a sharper arrow shape, but still with organic noise
+        // Using curveVertex for a rounder, cuter arrow shape
+        curveVertex(points[points.length - 1].x, points[points.length - 1].y);
         for (let p of points) {
-          vertex(p.x, p.y);
+          curveVertex(p.x, p.y);
         }
+        curveVertex(points[0].x, points[0].y);
+        curveVertex(points[1].x, points[1].y);
         break;
       }
       case 'bomb':
