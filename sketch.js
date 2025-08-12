@@ -89,6 +89,8 @@ function mousePressed() {
   }
 }
 
+const expressions = ['default', 'happy', 'wink', 'surprised'];
+
 // Slime class
 class Slime {
   constructor(x, y, r, vel, col, shape) {
@@ -100,6 +102,7 @@ class Slime {
     this.shape = shape || 'circle'; // Add shape property
     this.noiseSeed = random(1000);
     this.moveOffset = random(1000); // For Perlin noise-based movement
+    this.expression = random(expressions);
   }
 
   split() {
@@ -277,11 +280,55 @@ class Slime {
       TWO_PI - QUARTER_PI * 0.5
     );
 
-    // Eyes - must be drawn within the transformed matrix
-    fill(0);
+    // Face - must be drawn within the transformed matrix
     const eyeSize = this.r * 0.15;
-    ellipse(-this.r * 0.25, -this.r * 0.1, eyeSize, eyeSize);
-    ellipse(this.r * 0.25, -this.r * 0.1, eyeSize, eyeSize);
+    const eyeY = -this.r * 0.1;
+    const leftEyeX = -this.r * 0.25;
+    const rightEyeX = this.r * 0.25;
+
+    fill(0); // Black for eyes/mouth details
+
+    switch (this.expression) {
+      case 'happy':
+        // Eyes
+        ellipse(leftEyeX, eyeY, eyeSize, eyeSize);
+        ellipse(rightEyeX, eyeY, eyeSize, eyeSize);
+        // Smiling mouth
+        noFill();
+        stroke(0);
+        strokeWeight(this.r * 0.05);
+        arc(0, this.r * 0.1, this.r * 0.5, this.r * 0.4, 0, PI);
+        noStroke();
+        break;
+
+      case 'wink':
+        // Winking eye (left)
+        noFill();
+        stroke(0);
+        strokeWeight(this.r * 0.05);
+        arc(leftEyeX, eyeY, eyeSize * 0.8, eyeSize * 0.5, PI, TWO_PI);
+        noStroke();
+        // Open eye (right)
+        fill(0);
+        ellipse(rightEyeX, eyeY, eyeSize, eyeSize);
+        break;
+
+      case 'surprised':
+        // Wide eyes
+        ellipse(leftEyeX, eyeY, eyeSize * 1.2, eyeSize * 1.2);
+        ellipse(rightEyeX, eyeY, eyeSize * 1.2, eyeSize * 1.2);
+        // Open mouth
+        fill(0);
+        ellipse(0, this.r * 0.25, this.r * 0.25, this.r * 0.35);
+        break;
+
+      case 'default':
+      default:
+        // Default eyes
+        ellipse(leftEyeX, eyeY, eyeSize, eyeSize);
+        ellipse(rightEyeX, eyeY, eyeSize, eyeSize);
+        break;
+    }
 
     pop();
   }
