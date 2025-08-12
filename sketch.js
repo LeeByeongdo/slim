@@ -3,7 +3,7 @@ let slimes = [];
 function setup() {
   createCanvas(windowWidth, windowHeight);
   // Start with one large slime
-  slimes.push(new Slime(width / 2, height / 2, 60));
+  slimes.push(new Slime(width / 2, height / 2, 180));
 }
 
 function draw() {
