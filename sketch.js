@@ -180,10 +180,19 @@ class Slime {
     this.y += this.vel.y;
 
     // Bounce off walls
-    if (this.x > width - this.r || this.x < this.r) {
+    if (this.x > width - this.r) {
+      this.x = width - this.r;
+      this.vel.x *= -1;
+    } else if (this.x < this.r) {
+      this.x = this.r;
       this.vel.x *= -1;
     }
-    if (this.y > height - this.r || this.y < this.r) {
+
+    if (this.y > height - this.r) {
+      this.y = height - this.r;
+      this.vel.y *= -1;
+    } else if (this.y < this.r) {
+      this.y = this.r;
       this.vel.y *= -1;
     }
 
