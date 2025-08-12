@@ -2,8 +2,12 @@ let slimes = [];
 let explosions = [];
 const shapes = ['circle', 'square', 'triangle', 'bomb', 'killer'];
 
+// Cannon properties
+let cannon;
+
 function setup() {
   createCanvas(windowWidth, windowHeight);
+  cannon = new Cannon(); // Create the cannon instance
   const numSlimes = 15;
   for (let i = 0; i < numSlimes; i++) {
     const radius = random(20, 50);
@@ -110,9 +114,25 @@ function draw() {
       explosions.splice(i, 1);
     }
   }
+
+  // Draw the cannon
+  cannon.display();
 }
 
 function mousePressed() {
+  // Check for cannon click first
+  if (cannon.isClicked(mouseX, mouseY)) {
+    const radius = random(15, 30);
+    const x = cannon.x;
+    const y = cannon.y - cannon.h / 2; // Start at the nozzle
+    const vel = createVector(random(-2, 2), -12); // Shoot upwards
+    const shape = random(shapes.filter(s => s !== 'bomb')); // Don't shoot bombs for now
+    const col = color(random(100, 255), random(100, 255), random(100, 255), 180);
+
+    slimes.push(new Slime(x, y, radius, vel, col, shape));
+    return; // Prevent further click checks
+  }
+
   for (let i = slimes.length - 1; i >= 0; i--) {
     if (slimes[i].isClicked(mouseX, mouseY)) {
       if (slimes[i].r > 3.5) {
@@ -591,5 +611,41 @@ class KillerSlime extends Slime {
     this.y += this.vel.y;
     this.bounceOffWalls();
     this.moveOffset += 0.01;
+  }
+}
+
+// Cannon class
+class Cannon {
+  constructor() {
+    this.w = 100;
+    this.h = 60;
+    this.x = width / 2;
+    this.y = height - this.h / 2;
+  }
+
+  display() {
+    push();
+    translate(this.x, this.y);
+
+    // Barrel
+    fill(80);
+    noStroke();
+    rect(-this.w / 2, -this.h / 2, this.w, this.h, 10, 10, 0, 0);
+
+    // Base
+    fill(60);
+    arc(0, this.h / 2, this.w * 1.2, this.h, PI, TWO_PI);
+
+    pop();
+  }
+
+  isClicked(px, py) {
+    // A generous rectangular bounding box for the whole cannon
+    const cannonTop = this.y - this.h / 2;
+    const cannonBottom = this.y + this.h; // Bottom of the arc base
+    const cannonLeft = this.x - (this.w * 1.2) / 2;
+    const cannonRight = this.x + (this.w * 1.2) / 2;
+
+    return (px > cannonLeft && px < cannonRight && py > cannonTop && py < cannonBottom);
   }
 }
