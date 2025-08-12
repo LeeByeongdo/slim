@@ -1,6 +1,6 @@
 let slimes = [];
 let explosions = [];
-const shapes = ['circle', 'square', 'triangle', 'bomb'];
+const shapes = ['circle', 'square', 'triangle', 'bomb', 'worm'];
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
@@ -31,6 +31,12 @@ function draw() {
       if (slimes[i].intersects(slimes[j])) {
         const slimeA = slimes[i];
         const slimeB = slimes[j];
+
+        // --- PREVENT WORM INTERACTION ---
+        // For the initial version, worms do not merge or explode.
+        if (slimeA.shape === 'worm' || slimeB.shape === 'worm') {
+          continue;
+        }
 
         // --- BOMB LOGIC ---
         if (slimeA.shape === 'bomb' || slimeB.shape === 'bomb') {
@@ -125,6 +131,19 @@ class Slime {
     this.noiseSeed = random(1000);
     this.moveOffset = random(1000); // For Perlin noise-based movement
     this.expression = random(expressions);
+
+    if (this.shape === 'worm') {
+      this.numSegments = 10;
+      this.segmentLength = 5; // Distance between segments
+      this.segments = [];
+      for (let i = 0; i < this.numSegments; i++) {
+        // Place all segments at the starting position initially.
+        // The move() function will arrange them properly.
+        this.segments.push(createVector(this.x, this.y));
+      }
+    } else {
+      this.segments = null;
+    }
   }
 
   split() {
@@ -180,6 +199,9 @@ class Slime {
   }
 
   isClicked(px, py) {
+    if (this.shape === 'worm') {
+      return false; // Worms cannot be split by clicking.
+    }
     let d = dist(px, py, this.x, this.y);
     return (d < this.r);
   }
@@ -220,6 +242,24 @@ class Slime {
 
     // Increment noise offset for the next frame
     this.moveOffset += 0.01;
+
+    // Worm-specific segment following logic
+    if (this.shape === 'worm') {
+      this.segments[0].set(this.x, this.y); // Head segment follows the main x,y
+      for (let i = 1; i < this.numSegments; i++) {
+        const leader = this.segments[i - 1];
+        const follower = this.segments[i];
+
+        // Calculate the vector from the leader to the follower
+        const direction = p5.Vector.sub(follower, leader);
+        // Set its magnitude to be the desired segment length
+        direction.setMag(this.segmentLength);
+
+        // The follower's new position is the leader's position + the direction vector
+        const newPosition = p5.Vector.add(leader, direction);
+        follower.set(newPosition);
+      }
+    }
   }
 
   display() {
@@ -234,71 +274,87 @@ class Slime {
     const stretch = map(speed, 0, maxSpeed, 1, maxStretch);
     const squash = 1 / stretch;
 
+    // For worms, draw the body segments without rotation/scaling
+    if (this.shape === 'worm') {
+      noStroke();
+      fill(this.color);
+      // Draw segments relative to the head's position (which is the current origin)
+      for (let i = this.numSegments - 1; i > 0; i--) {
+        const seg = this.segments[i];
+        ellipse(seg.x - this.x, seg.y - this.y, this.r * 2, this.r * 2);
+      }
+    }
+
     rotate(angle);
     scale(stretch, squash);
 
-    // Slime body
+    // Slime body (or head for worm)
     noStroke();
     fill(this.color);
-    beginShape();
 
     const timeFactor = frameCount * 0.01;
     const noiseFactor = 0.2;
 
-    switch (this.shape) {
-      case 'square': {
-        let corners = [
-          createVector(-this.r, -this.r),
-          createVector(this.r, -this.r),
-          createVector(this.r, this.r),
-          createVector(-this.r, this.r)
-        ];
-        corners.forEach(c => {
-          c.x += map(noise(c.x * 0.05, c.y * 0.05, this.noiseSeed + timeFactor), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
-          c.y += map(noise(c.x * 0.05, c.y * 0.05, this.noiseSeed + timeFactor + 100), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
-        });
-        curveVertex(corners[3].x, corners[3].y);
-        for (let c of corners) {
-          curveVertex(c.x, c.y);
+    if (this.shape === 'worm') {
+      // Draw the head, which is affected by rotation/scale
+      ellipse(0, 0, this.r * 2, this.r * 2);
+    } else {
+      beginShape();
+      switch (this.shape) {
+        case 'square': {
+          let corners = [
+            createVector(-this.r, -this.r),
+            createVector(this.r, -this.r),
+            createVector(this.r, this.r),
+            createVector(-this.r, this.r)
+          ];
+          corners.forEach(c => {
+            c.x += map(noise(c.x * 0.05, c.y * 0.05, this.noiseSeed + timeFactor), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+            c.y += map(noise(c.x * 0.05, c.y * 0.05, this.noiseSeed + timeFactor + 100), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+          });
+          curveVertex(corners[3].x, corners[3].y);
+          for (let c of corners) {
+            curveVertex(c.x, c.y);
+          }
+          curveVertex(corners[0].x, corners[0].y);
+          curveVertex(corners[1].x, corners[1].y);
+          break;
         }
-        curveVertex(corners[0].x, corners[0].y);
-        curveVertex(corners[1].x, corners[1].y);
-        break;
-      }
-      case 'triangle': {
-        let points = [
-          createVector(0, -this.r * 1.15),
-          createVector(-this.r, this.r * 0.85),
-          createVector(this.r, this.r * 0.85)
-        ];
-        points.forEach(p => {
-          p.x += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
-          p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 200), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
-        });
-        curveVertex(points[2].x, points[2].y);
-        for (let p of points) {
-          curveVertex(p.x, p.y);
+        case 'triangle': {
+          let points = [
+            createVector(0, -this.r * 1.15),
+            createVector(-this.r, this.r * 0.85),
+            createVector(this.r, this.r * 0.85)
+          ];
+          points.forEach(p => {
+            p.x += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+            p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 200), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+          });
+          curveVertex(points[2].x, points[2].y);
+          for (let p of points) {
+            curveVertex(p.x, p.y);
+          }
+          curveVertex(points[0].x, points[0].y);
+          curveVertex(points[1].x, points[1].y);
+          break;
         }
-        curveVertex(points[0].x, points[0].y);
-        curveVertex(points[1].x, points[1].y);
-        break;
-      }
-      case 'bomb':
-      case 'circle':
-      default: {
-        const noiseMax = 0.5;
-        for (let a = 0; a < TWO_PI; a += 0.1) {
-          const xoff = map(cos(a), -1, 1, 0, noiseMax);
-          const yoff = map(sin(a), -1, 1, 0, noiseMax);
-          const r = this.r + map(noise(xoff, yoff, this.noiseSeed + timeFactor), 0, 1, -this.r * 0.1, this.r * 0.1);
-          const x = r * cos(a);
-          const y = r * sin(a);
-          vertex(x, y);
+        case 'bomb':
+        case 'circle':
+        default: {
+          const noiseMax = 0.5;
+          for (let a = 0; a < TWO_PI; a += 0.1) {
+            const xoff = map(cos(a), -1, 1, 0, noiseMax);
+            const yoff = map(sin(a), -1, 1, 0, noiseMax);
+            const r = this.r + map(noise(xoff, yoff, this.noiseSeed + timeFactor), 0, 1, -this.r * 0.1, this.r * 0.1);
+            const x = r * cos(a);
+            const y = r * sin(a);
+            vertex(x, y);
+          }
+          break;
         }
-        break;
       }
+      endShape(CLOSE);
     }
-    endShape(CLOSE);
 
     // Draw bomb icon if the shape is 'bomb'
     if (this.shape === 'bomb') {
