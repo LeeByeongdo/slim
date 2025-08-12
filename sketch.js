@@ -1,6 +1,6 @@
 let slimes = [];
 let explosions = [];
-const shapes = ['circle', 'square', 'triangle', 'bomb'];
+const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow'];
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
@@ -185,14 +185,21 @@ class Slime {
   }
 
   move() {
-    // Generate a smoothly changing angle from Perlin noise
-    let angle = noise(this.moveOffset) * TWO_PI * 2;
-    let acc = p5.Vector.fromAngle(angle);
-    acc.setMag(0.1); // Acceleration magnitude
-
-    // Update velocity with acceleration
-    this.vel.add(acc);
-    this.vel.limit(3); // Limit max speed
+    if (this.shape === 'arrow') {
+      // Arrow slimes move towards the mouse
+      let target = createVector(mouseX, mouseY);
+      let acc = p5.Vector.sub(target, createVector(this.x, this.y));
+      acc.setMag(0.2); // Constant acceleration towards the mouse
+      this.vel.add(acc);
+      this.vel.limit(4); // Limit max speed
+    } else {
+      // Original Perlin noise movement for other shapes
+      let angle = noise(this.moveOffset) * TWO_PI * 2;
+      let acc = p5.Vector.fromAngle(angle);
+      acc.setMag(0.1);
+      this.vel.add(acc);
+      this.vel.limit(3);
+    }
 
     // Add some friction/drag to make the movement more springy
     this.vel.mult(0.99);
@@ -209,7 +216,6 @@ class Slime {
       this.x = this.r;
       this.vel.x *= -1;
     }
-
     if (this.y > height - this.r) {
       this.y = height - this.r;
       this.vel.y *= -1;
@@ -218,8 +224,10 @@ class Slime {
       this.vel.y *= -1;
     }
 
-    // Increment noise offset for the next frame
-    this.moveOffset += 0.01;
+    // Increment noise offset for the next frame for non-arrow slimes
+    if (this.shape !== 'arrow') {
+      this.moveOffset += 0.01;
+    }
   }
 
   display() {
@@ -281,6 +289,25 @@ class Slime {
         }
         curveVertex(points[0].x, points[0].y);
         curveVertex(points[1].x, points[1].y);
+        break;
+      }
+      case 'arrow': {
+        let points = [
+          createVector(this.r, 0), // Tip
+          createVector(-this.r, this.r), // Wing back right
+          createVector(-this.r * 0.5, 0), // Tail middle
+          createVector(-this.r, -this.r) // Wing back left
+        ];
+
+        points.forEach(p => {
+          p.x += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 300), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+          p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 400), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+        });
+
+        // Using vertex for a sharper arrow shape, but still with organic noise
+        for (let p of points) {
+          vertex(p.x, p.y);
+        }
         break;
       }
       case 'bomb':
