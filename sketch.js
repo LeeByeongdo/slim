@@ -13,6 +13,10 @@ function draw() {
   for (let i = slimes.length - 1; i >= 0; i--) {
     for (let j = i - 1; j >= 0; j--) {
       if (slimes[i].intersects(slimes[j])) {
+        // Respect the cooldown period before merging
+        if (slimes[i].mergeCooldown > 0 || slimes[j].mergeCooldown > 0) {
+          continue;
+        }
         const slimeA = slimes[i];
         const slimeB = slimes[j];
         const areaA = PI * pow(slimeA.r, 2);
@@ -40,6 +44,9 @@ function draw() {
   for (let i = 0; i < slimes.length; i++) {
     slimes[i].move();
     slimes[i].display();
+    if (slimes[i].mergeCooldown > 0) {
+      slimes[i].mergeCooldown--;
+    }
   }
 }
 
@@ -66,6 +73,7 @@ class Slime {
     this.vel = vel || p5.Vector.random2D().mult(random(2, 4));
     this.color = color(100, 150, 255, 200);
     this.noiseSeed = random(1000);
+    this.mergeCooldown = 0; // Initialize merge cooldown
   }
 
   split() {
@@ -78,6 +86,9 @@ class Slime {
     // Add a small epsilon (1) for robustness
     let s1 = new Slime(this.x - newR - 1, this.y, newR, newVel1);
     let s2 = new Slime(this.x + newR + 1, this.y, newR, newVel2);
+
+    s1.mergeCooldown = 15; // Give new slimes a merge cooldown
+    s2.mergeCooldown = 15;
 
     return [s1, s2];
   }
