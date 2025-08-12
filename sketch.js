@@ -28,7 +28,15 @@ function draw() {
           p5.Vector.mult(slimeB.vel, areaB)
         ).div(combinedArea);
 
-        slimes.push(new Slime(newX, newY, newRadius, newVel));
+        // Color merging logic
+        const colorA = slimeA.color.levels;
+        const colorB = slimeB.color.levels;
+        const newR = (colorA[0] * areaA + colorB[0] * areaB) / combinedArea;
+        const newG = (colorA[1] * areaA + colorB[1] * areaB) / combinedArea;
+        const newB = (colorA[2] * areaA + colorB[2] * areaB) / combinedArea;
+        const newColor = color(newR, newG, newB, colorA[3]); // Keep original alpha
+
+        slimes.push(new Slime(newX, newY, newRadius, newVel, newColor));
 
         slimes.splice(i, 1);
         slimes.splice(j, 1);
@@ -59,12 +67,12 @@ function mousePressed() {
 
 // Slime class
 class Slime {
-  constructor(x, y, r, vel) {
+  constructor(x, y, r, vel, col) {
     this.x = x;
     this.y = y;
     this.r = r;
     this.vel = vel || createVector();
-    this.color = color(150, 255, 150, 180); // 연두색 베이스에 투명도 적용
+    this.color = col || color(150, 255, 150, 180); // Provide a default color
     this.noiseSeed = random(1000);
     this.moveOffset = random(1000); // For Perlin noise-based movement
   }
@@ -83,9 +91,35 @@ class Slime {
     // Position the new slimes along the split direction to prevent instant merging
     let posOffset1 = p5.Vector.mult(splitDir, newR + 1);
     let posOffset2 = p5.Vector.mult(splitDir, -newR - 1);
+    
+    // Accurately corrected color splitting logic to preserve color on merge.
+    const parentR = red(this.color);
+    const parentG = green(this.color);
+    const parentB = blue(this.color);
+    const parentA = alpha(this.color);
 
-    let s1 = new Slime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1);
-    let s2 = new Slime(this.x + posOffset2.x, this.y + posOffset2.y, newR, newVel2);
+    // Calculate the valid range for the first slime's red component (r1)
+    // to ensure the second component (r2) is also a valid color (0-255).
+    const minR1 = max(0, 2 * parentR - 255);
+    const maxR1 = min(255, 2 * parentR);
+    const r1 = random(minR1, maxR1);
+    const r2 = 2 * parentR - r1;
+
+    const minG1 = max(0, 2 * parentG - 255);
+    const maxG1 = min(255, 2 * parentG);
+    const g1 = random(minG1, maxG1);
+    const g2 = 2 * parentG - g1;
+
+    const minB1 = max(0, 2 * parentB - 255);
+    const maxB1 = min(255, 2 * parentB);
+    const b1 = random(minB1, maxB1);
+    const b2 = 2 * parentB - b1;
+
+    const c1 = color(r1, g1, b1, parentA);
+    const c2 = color(r2, g2, b2, parentA);
+
+    let s1 = new Slime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1, c1);
+    let s2 = new Slime(this.x + posOffset2.x, this.y + posOffset2.y, newR, newVel2, c2);
 
     return [s1, s2];
   }
