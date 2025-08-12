@@ -2,8 +2,16 @@ let slimes = [];
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
-  // Start with one large slime
-  slimes.push(new Slime(width / 2, height / 2, 180));
+  const shapes = ['circle', 'square', 'triangle'];
+  const numSlimes = 15;
+  for (let i = 0; i < numSlimes; i++) {
+    const radius = random(20, 50);
+    const x = random(radius, width - radius);
+    const y = random(radius, height - radius);
+    const shape = random(shapes);
+    const col = color(random(100, 255), random(100, 255), random(100, 255), 180);
+    slimes.push(new Slime(x, y, radius, p5.Vector.random2D().mult(2), col, shape));
+  }
 }
 
 function draw() {
@@ -36,7 +44,8 @@ function draw() {
         const newB = (colorA[2] * areaA + colorB[2] * areaB) / combinedArea;
         const newColor = color(newR, newG, newB, colorA[3]); // Keep original alpha
 
-        slimes.push(new Slime(newX, newY, newRadius, newVel, newColor));
+        const newShape = slimeA.r > slimeB.r ? slimeA.shape : slimeB.shape;
+        slimes.push(new Slime(newX, newY, newRadius, newVel, newColor, newShape));
 
         slimes.splice(i, 1);
         slimes.splice(j, 1);
@@ -67,12 +76,13 @@ function mousePressed() {
 
 // Slime class
 class Slime {
-  constructor(x, y, r, vel, col) {
+  constructor(x, y, r, vel, col, shape) {
     this.x = x;
     this.y = y;
     this.r = r;
     this.vel = vel || createVector();
     this.color = col || color(150, 255, 150, 180); // Provide a default color
+    this.shape = shape || 'circle'; // Add shape property
     this.noiseSeed = random(1000);
     this.moveOffset = random(1000); // For Perlin noise-based movement
   }
@@ -118,8 +128,8 @@ class Slime {
     const c1 = color(r1, g1, b1, parentA);
     const c2 = color(r2, g2, b2, parentA);
 
-    let s1 = new Slime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1, c1);
-    let s2 = new Slime(this.x + posOffset2.x, this.y + posOffset2.y, newR, newVel2, c2);
+    let s1 = new Slime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1, c1, this.shape);
+    let s2 = new Slime(this.x + posOffset2.x, this.y + posOffset2.y, newR, newVel2, c2, this.shape);
 
     return [s1, s2];
   }
@@ -182,14 +192,61 @@ class Slime {
     noStroke();
     fill(this.color);
     beginShape();
-    const noiseMax = 0.5;
-    for (let a = 0; a < TWO_PI; a += 0.1) {
-      const xoff = map(cos(a), -1, 1, 0, noiseMax);
-      const yoff = map(sin(a), -1, 1, 0, noiseMax);
-      const r = this.r + map(noise(xoff, yoff, this.noiseSeed + frameCount * 0.01), 0, 1, -this.r * 0.1, this.r * 0.1);
-      const x = r * cos(a);
-      const y = r * sin(a);
-      vertex(x, y);
+
+    const timeFactor = frameCount * 0.01;
+    const noiseFactor = 0.2;
+
+    switch (this.shape) {
+      case 'square': {
+        let corners = [
+          createVector(-this.r, -this.r),
+          createVector(this.r, -this.r),
+          createVector(this.r, this.r),
+          createVector(-this.r, this.r)
+        ];
+        corners.forEach(c => {
+          c.x += map(noise(c.x * 0.05, c.y * 0.05, this.noiseSeed + timeFactor), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+          c.y += map(noise(c.x * 0.05, c.y * 0.05, this.noiseSeed + timeFactor + 100), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+        });
+        curveVertex(corners[3].x, corners[3].y);
+        for (let c of corners) {
+          curveVertex(c.x, c.y);
+        }
+        curveVertex(corners[0].x, corners[0].y);
+        curveVertex(corners[1].x, corners[1].y);
+        break;
+      }
+      case 'triangle': {
+        let points = [
+          createVector(0, -this.r * 1.15),
+          createVector(-this.r, this.r * 0.85),
+          createVector(this.r, this.r * 0.85)
+        ];
+        points.forEach(p => {
+          p.x += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+          p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 200), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+        });
+        curveVertex(points[2].x, points[2].y);
+        for (let p of points) {
+          curveVertex(p.x, p.y);
+        }
+        curveVertex(points[0].x, points[0].y);
+        curveVertex(points[1].x, points[1].y);
+        break;
+      }
+      case 'circle':
+      default: {
+        const noiseMax = 0.5;
+        for (let a = 0; a < TWO_PI; a += 0.1) {
+          const xoff = map(cos(a), -1, 1, 0, noiseMax);
+          const yoff = map(sin(a), -1, 1, 0, noiseMax);
+          const r = this.r + map(noise(xoff, yoff, this.noiseSeed + timeFactor), 0, 1, -this.r * 0.1, this.r * 0.1);
+          const x = r * cos(a);
+          const y = r * sin(a);
+          vertex(x, y);
+        }
+        break;
+      }
     }
     endShape(CLOSE);
 
