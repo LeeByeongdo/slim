@@ -1,9 +1,13 @@
 let slimes = [];
 let explosions = [];
-const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow'];
+const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow', 'killer'];
+
+// Cannon properties
+let cannon;
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
+  cannon = new Cannon(); // Create the cannon instance
   const numSlimes = 15;
   for (let i = 0; i < numSlimes; i++) {
     const radius = random(20, 50);
@@ -11,7 +15,12 @@ function setup() {
     const y = random(radius, height - radius);
     const shape = random(shapes);
     const col = color(random(100, 255), random(100, 255), random(100, 255), 180);
-    slimes.push(new Slime(x, y, radius, p5.Vector.random2D().mult(2), col, shape));
+
+    if (shape === 'killer') {
+      slimes.push(new KillerSlime(x, y, radius, p5.Vector.random2D().mult(2), col, shape));
+    } else {
+      slimes.push(new Slime(x, y, radius, p5.Vector.random2D().mult(2), col, shape));
+    }
   }
 }
 
@@ -64,7 +73,13 @@ function draw() {
           const newColor = color(newR, newG, newB, colorA[3]); // Keep original alpha
 
           const newShape = slimeA.r > slimeB.r ? slimeA.shape : slimeB.shape;
-          newSlimes.push(new Slime(newX, newY, newRadius, newVel, newColor, newShape));
+          const isKiller = slimeA instanceof KillerSlime || slimeB instanceof KillerSlime;
+
+          if (isKiller) {
+            newSlimes.push(new KillerSlime(newX, newY, newRadius, newVel, newColor, 'killer'));
+          } else {
+            newSlimes.push(new Slime(newX, newY, newRadius, newVel, newColor, newShape));
+          }
 
           mergedIndices.add(i);
           mergedIndices.add(j);
@@ -83,7 +98,11 @@ function draw() {
   slimes = nextGeneration.concat(newSlimes);
 
   for (let i = 0; i < slimes.length; i++) {
-    slimes[i].move();
+    if (slimes[i] instanceof KillerSlime) {
+      slimes[i].move(slimes);
+    } else {
+      slimes[i].move();
+    }
     slimes[i].display();
   }
 
@@ -95,9 +114,25 @@ function draw() {
       explosions.splice(i, 1);
     }
   }
+
+  // Draw the cannon
+  cannon.display();
 }
 
 function mousePressed() {
+  // Check for cannon click first
+  if (cannon.isClicked(mouseX, mouseY)) {
+    const radius = random(15, 30);
+    const x = cannon.x;
+    const y = cannon.y - cannon.h / 2; // Start at the nozzle
+    const vel = createVector(random(-2, 2), -12); // Shoot upwards
+    const shape = random(shapes.filter(s => s !== 'bomb')); // Don't shoot bombs for now
+    const col = color(random(100, 255), random(100, 255), random(100, 255), 180);
+
+    slimes.push(new Slime(x, y, radius, vel, col, shape));
+    return; // Prevent further click checks
+  }
+
   for (let i = slimes.length - 1; i >= 0; i--) {
     if (slimes[i].isClicked(mouseX, mouseY)) {
       if (slimes[i].r > 3.5) {
@@ -208,7 +243,13 @@ class Slime {
     this.x += this.vel.x;
     this.y += this.vel.y;
 
-    // Bounce off walls
+    this.bounceOffWalls();
+
+    // Increment noise offset for the next frame
+    this.moveOffset += 0.01;
+  }
+
+  bounceOffWalls() {
     if (this.x > width - this.r) {
       this.x = width - this.r;
       this.vel.x *= -1;
@@ -223,7 +264,7 @@ class Slime {
       this.y = this.r;
       this.vel.y *= -1;
     }
-
+    
     // Increment noise offset for the next frame for non-arrow slimes
     if (this.shape !== 'arrow') {
       this.moveOffset += 0.01;
@@ -476,5 +517,172 @@ class Particle {
     // Use lifespan for alpha to fade out
     fill(this.color.levels[0], this.color.levels[1], this.color.levels[2], this.lifespan);
     ellipse(this.x, this.y, this.r * 2);
+  }
+}
+
+class KillerSlime extends Slime {
+  constructor(x, y, r, vel, col, shape) {
+    super(x, y, r, vel, col, shape || 'killer');
+    // Killer slimes are always angry!
+    this.expression = 'surprised'; // Using 'surprised' as a proxy for angry for now
+    this.maxSpeed = 3; // Max speed for steering
+    this.maxForce = 0.15; // Max steering force
+  }
+
+  // Method to calculate a steering force towards a target
+  // Implements the "arrive" behavior
+  seek(target) {
+    // The 'position' is stored as separate x and y properties in the base Slime class
+    const position = createVector(this.x, this.y);
+    let desired = p5.Vector.sub(target, position);
+    let d = desired.mag();
+
+    // Arrive behavior: slow down as we approach the target
+    if (d < 100) {
+      let m = map(d, 0, 100, 0, this.maxSpeed);
+      desired.setMag(m);
+    } else {
+      desired.setMag(this.maxSpeed);
+    }
+
+    // Steering = Desired minus Velocity
+    let steer = p5.Vector.sub(desired, this.vel);
+    steer.limit(this.maxForce);
+    return steer;
+  }
+
+  // Method to calculate a steering force away from a target
+  flee(target) {
+    const position = createVector(this.x, this.y);
+    let desired = p5.Vector.sub(target, position);
+    // Fleeing is the opposite of seeking
+    desired.mult(-1);
+    desired.setMag(this.maxSpeed);
+
+    let steer = p5.Vector.sub(desired, this.vel);
+    steer.limit(this.maxForce);
+    return steer;
+  }
+
+  // This method calculates the steering force based on all other slimes
+  calculateSteering(slimes) {
+    let separationForce = createVector();
+    let seekForce = createVector();
+
+    let closestPrey = null;
+    let closestDist = Infinity;
+    let predators = [];
+
+    // 1. Separate slimes into prey and predators
+    for (let other of slimes) {
+      if (other === this) continue;
+      let d = dist(this.x, this.y, other.x, other.y);
+
+      if (other.r > this.r) {
+        // It's a predator, flee if it's too close
+        if (d < this.r + 100) { // Flee radius
+          predators.push(other);
+        }
+      } else {
+        // It's prey, find the closest one
+        if (d < closestDist) {
+          closestDist = d;
+          closestPrey = other;
+        }
+      }
+    }
+
+    // 2. Calculate flee force from predators
+    if (predators.length > 0) {
+      let fleeSum = createVector();
+      for (let predator of predators) {
+        fleeSum.add(this.flee(createVector(predator.x, predator.y)));
+      }
+      fleeSum.div(predators.length); // Average the flee forces
+      separationForce = fleeSum;
+    }
+
+    // 3. Calculate seek force for the closest prey
+    if (closestPrey) {
+      seekForce = this.seek(createVector(closestPrey.x, closestPrey.y));
+    }
+
+    // 4. Weight the forces. Fleeing is more important.
+    separationForce.mult(2.0);
+    seekForce.mult(1.0);
+
+    // 5. Combine forces
+    let totalForce = createVector();
+    if (separationForce.mag() > 0) {
+      // If there's a predator to flee from, that's the only thing that matters
+      totalForce = separationForce;
+    } else if (seekForce.mag() > 0) {
+      // Otherwise, seek prey
+      totalForce = seekForce;
+    }
+
+    return totalForce;
+  }
+
+  // Override the move method to incorporate steering
+  move(slimes) {
+    const steeringForce = this.calculateSteering(slimes);
+
+    // If there's a specific target (prey or predator), use the steering force.
+    // Otherwise, use the default wandering behavior.
+    if (steeringForce.mag() > 0) {
+      this.vel.add(steeringForce);
+      this.vel.limit(this.maxSpeed);
+    } else {
+      // Wander behavior (from original Slime.move())
+      let angle = noise(this.moveOffset) * TWO_PI * 2;
+      let acc = p5.Vector.fromAngle(angle);
+      acc.setMag(0.1);
+      this.vel.add(acc);
+      this.vel.limit(3); // Keep original wander speed limit
+    }
+
+    // Common movement logic (from original Slime.move())
+    this.vel.mult(0.99);
+    this.x += this.vel.x;
+    this.y += this.vel.y;
+    this.bounceOffWalls();
+    this.moveOffset += 0.01;
+  }
+}
+
+// Cannon class
+class Cannon {
+  constructor() {
+    this.w = 100;
+    this.h = 60;
+    this.x = width / 2;
+    this.y = height - this.h / 2;
+  }
+
+  display() {
+    push();
+    translate(this.x, this.y);
+
+    // Barrel
+    fill(80);
+    noStroke();
+    rect(-this.w / 2, -this.h / 2, this.w, this.h, 10, 10, 0, 0);
+
+    // Base
+    fill(60);
+    arc(0, this.h / 2, this.w * 1.2, this.h, PI, TWO_PI);
+
+    pop();
+  }
+
+  isClicked(px, py) {
+    // A generous rectangular bounding box for the whole cannon
+    const cannonTop = this.y - this.h / 2;
+    const cannonBottom = this.y + this.h; // Bottom of the arc base
+    const cannonLeft = this.x - (this.w * 1.2) / 2;
+    const cannonRight = this.x + (this.w * 1.2) / 2;
+
+    return (px > cannonLeft && px < cannonRight && py > cannonTop && py < cannonBottom);
   }
 }
