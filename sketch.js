@@ -2,6 +2,18 @@ let slimes = [];
 let explosions = [];
 const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow', 'killer'];
 
+// Create a weighted list of shapes to make bombs 10x less likely
+const weightedShapes = [];
+for (const shape of shapes) {
+  if (shape === 'bomb' || shape === 'killer') {
+    weightedShapes.push(shape);
+  } else {
+    for (let i = 0; i < 10; i++) {
+      weightedShapes.push(shape);
+    }
+  }
+}
+
 // Cannon properties
 let cannon;
 
@@ -13,7 +25,7 @@ function setup() {
     const radius = random(20, 50);
     const x = random(radius, width - radius);
     const y = random(radius, height - radius);
-    const shape = random(shapes);
+    const shape = random(weightedShapes);
     const col = color(random(100, 255), random(100, 255), random(100, 255), 180);
 
     if (shape === 'killer') {
@@ -203,8 +215,8 @@ class Slime {
     const c1 = color(r1, g1, b1, parentA);
     const c2 = color(r2, g2, b2, parentA);
 
-    let s1 = new Slime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1, c1, random(shapes));
-    let s2 = new Slime(this.x + posOffset2.x, this.y + posOffset2.y, newR, newVel2, c2, random(shapes));
+    let s1 = new Slime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1, c1, random(weightedShapes));
+    let s2 = new Slime(this.x + posOffset2.x, this.y + posOffset2.y, newR, newVel2, c2, random(weightedShapes));
 
     return [s1, s2];
   }
