@@ -78,7 +78,7 @@ function draw() {
 function mousePressed() {
   for (let i = slimes.length - 1; i >= 0; i--) {
     if (slimes[i].isClicked(mouseX, mouseY)) {
-      if (slimes[i].r > 10) {
+      if (slimes[i].r > 3.5) {
         let newSlimes = slimes[i].split();
         slimes.push(newSlimes[0]);
         slimes.push(newSlimes[1]);
