@@ -80,23 +80,28 @@ class Slime {
   split() {
     let newR = this.r * 0.707;
 
-    // Corrected color splitting logic based on C_parent = (C1 + C2) / 2
+    // Accurately corrected color splitting logic to preserve color on merge.
     const parentR = red(this.color);
     const parentG = green(this.color);
     const parentB = blue(this.color);
     const parentA = alpha(this.color);
 
-    // For each channel, pick a random value for the first slime's color.
-    // Then calculate the second slime's color to balance it out.
-    // This ensures that (r1 + r2) / 2 is as close as possible to parentR,
-    // respecting the 0-255 color boundaries.
-    const r1 = constrain(random(0, parentR * 2), 0, 255);
-    const g1 = constrain(random(0, parentG * 2), 0, 255);
-    const b1 = constrain(random(0, parentB * 2), 0, 255);
+    // Calculate the valid range for the first slime's red component (r1)
+    // to ensure the second component (r2) is also a valid color (0-255).
+    const minR1 = max(0, 2 * parentR - 255);
+    const maxR1 = min(255, 2 * parentR);
+    const r1 = random(minR1, maxR1);
+    const r2 = 2 * parentR - r1;
 
-    const r2 = constrain(parentR * 2 - r1, 0, 255);
-    const g2 = constrain(parentG * 2 - g1, 0, 255);
-    const b2 = constrain(parentB * 2 - b1, 0, 255);
+    const minG1 = max(0, 2 * parentG - 255);
+    const maxG1 = min(255, 2 * parentG);
+    const g1 = random(minG1, maxG1);
+    const g2 = 2 * parentG - g1;
+
+    const minB1 = max(0, 2 * parentB - 255);
+    const maxB1 = min(255, 2 * parentB);
+    const b1 = random(minB1, maxB1);
+    const b2 = 2 * parentB - b1;
 
     const c1 = color(r1, g1, b1, parentA);
     const c2 = color(r2, g2, b2, parentA);
