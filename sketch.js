@@ -1,6 +1,7 @@
 let slimes = [];
 let explosions = [];
 const shapes = ['circle', 'square', 'triangle', 'bomb'];
+const motions = ['noise', 'angular'];
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
@@ -10,8 +11,9 @@ function setup() {
     const x = random(radius, width - radius);
     const y = random(radius, height - radius);
     const shape = random(shapes);
+    const motion = random(motions);
     const col = color(random(100, 255), random(100, 255), random(100, 255), 180);
-    slimes.push(new Slime(x, y, radius, p5.Vector.random2D().mult(2), col, shape));
+    slimes.push(new Slime(x, y, radius, p5.Vector.random2D().mult(2), col, shape, motion));
   }
 }
 
@@ -64,7 +66,8 @@ function draw() {
           const newColor = color(newR, newG, newB, colorA[3]); // Keep original alpha
 
           const newShape = slimeA.r > slimeB.r ? slimeA.shape : slimeB.shape;
-          newSlimes.push(new Slime(newX, newY, newRadius, newVel, newColor, newShape));
+          const newMotion = slimeA.r > slimeB.r ? slimeA.motion : slimeB.motion;
+          newSlimes.push(new Slime(newX, newY, newRadius, newVel, newColor, newShape, newMotion));
 
           mergedIndices.add(i);
           mergedIndices.add(j);
@@ -115,16 +118,26 @@ const expressions = ['default', 'happy', 'wink', 'surprised'];
 
 // Slime class
 class Slime {
-  constructor(x, y, r, vel, col, shape) {
+  constructor(x, y, r, vel, col, shape, motion) {
     this.x = x;
     this.y = y;
     this.r = r;
     this.vel = vel || createVector();
     this.color = col || color(150, 255, 150, 180); // Provide a default color
     this.shape = shape || 'circle'; // Add shape property
+    this.motion = motion || 'noise';
     this.noiseSeed = random(1000);
     this.moveOffset = random(1000); // For Perlin noise-based movement
     this.expression = random(expressions);
+
+    // Angular motion properties
+    if (this.motion === 'angular') {
+      this.angle = random(TWO_PI);
+      this.angleVelocity = random(-0.02, 0.02);
+      this.angleAcceleration = 0; // Not used yet, but good to have
+      this.pivot = createVector(x, y); // The center of the circular path
+      this.orbitalRadius = random(50, min(width, height) / 4);
+    }
   }
 
   split() {
@@ -168,8 +181,8 @@ class Slime {
     const c1 = color(r1, g1, b1, parentA);
     const c2 = color(r2, g2, b2, parentA);
 
-    let s1 = new Slime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1, c1, random(shapes));
-    let s2 = new Slime(this.x + posOffset2.x, this.y + posOffset2.y, newR, newVel2, c2, random(shapes));
+    let s1 = new Slime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1, c1, random(shapes), this.motion);
+    let s2 = new Slime(this.x + posOffset2.x, this.y + posOffset2.y, newR, newVel2, c2, random(shapes), this.motion);
 
     return [s1, s2];
   }
@@ -185,41 +198,59 @@ class Slime {
   }
 
   move() {
-    // Generate a smoothly changing angle from Perlin noise
-    let angle = noise(this.moveOffset) * TWO_PI * 2;
-    let acc = p5.Vector.fromAngle(angle);
-    acc.setMag(0.1); // Acceleration magnitude
+    if (this.motion === 'angular') {
+      // --- ANGULAR MOTION ---
+      this.angle += this.angleVelocity;
 
-    // Update velocity with acceleration
-    this.vel.add(acc);
-    this.vel.limit(3); // Limit max speed
+      // Calculate new position based on pivot, radius, and angle
+      this.x = this.pivot.x + this.orbitalRadius * cos(this.angle);
+      this.y = this.pivot.y + this.orbitalRadius * sin(this.angle);
 
-    // Add some friction/drag to make the movement more springy
-    this.vel.mult(0.99);
+      // To make squash and stretch work, we need to calculate a velocity vector.
+      // The velocity is tangential to the circular path.
+      // It's perpendicular to the vector from the pivot to the slime.
+      const radiusVector = createVector(this.x - this.pivot.x, this.y - this.pivot.y);
+      this.vel = radiusVector.copy().rotate(HALF_PI);
+      this.vel.setMag(abs(this.angleVelocity * this.orbitalRadius));
 
-    // Update position with velocity
-    this.x += this.vel.x;
-    this.y += this.vel.y;
+    } else {
+      // --- NOISE MOTION (Existing) ---
+      // Generate a smoothly changing angle from Perlin noise
+      let angle = noise(this.moveOffset) * TWO_PI * 2;
+      let acc = p5.Vector.fromAngle(angle);
+      acc.setMag(0.1); // Acceleration magnitude
 
-    // Bounce off walls
-    if (this.x > width - this.r) {
-      this.x = width - this.r;
-      this.vel.x *= -1;
-    } else if (this.x < this.r) {
-      this.x = this.r;
-      this.vel.x *= -1;
+      // Update velocity with acceleration
+      this.vel.add(acc);
+      this.vel.limit(3); // Limit max speed
+
+      // Add some friction/drag to make the movement more springy
+      this.vel.mult(0.99);
+
+      // Update position with velocity
+      this.x += this.vel.x;
+      this.y += this.vel.y;
+
+      // Bounce off walls
+      if (this.x > width - this.r) {
+        this.x = width - this.r;
+        this.vel.x *= -1;
+      } else if (this.x < this.r) {
+        this.x = this.r;
+        this.vel.x *= -1;
+      }
+
+      if (this.y > height - this.r) {
+        this.y = height - this.r;
+        this.vel.y *= -1;
+      } else if (this.y < this.r) {
+        this.y = this.r;
+        this.vel.y *= -1;
+      }
+
+      // Increment noise offset for the next frame
+      this.moveOffset += 0.01;
     }
-
-    if (this.y > height - this.r) {
-      this.y = height - this.r;
-      this.vel.y *= -1;
-    } else if (this.y < this.r) {
-      this.y = this.r;
-      this.vel.y *= -1;
-    }
-
-    // Increment noise offset for the next frame
-    this.moveOffset += 0.01;
   }
 
   display() {
