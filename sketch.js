@@ -1,5 +1,6 @@
 let slimes = [];
-const shapes = ['circle', 'square', 'triangle'];
+let explosions = [];
+const shapes = ['circle', 'square', 'triangle', 'bomb'];
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
@@ -30,32 +31,44 @@ function draw() {
       if (slimes[i].intersects(slimes[j])) {
         const slimeA = slimes[i];
         const slimeB = slimes[j];
-        const areaA = PI * pow(slimeA.r, 2);
-        const areaB = PI * pow(slimeB.r, 2);
-        const combinedArea = areaA + areaB;
-        const newRadius = sqrt(combinedArea / PI);
 
-        const newX = (slimeA.x * areaA + slimeB.x * areaB) / combinedArea;
-        const newY = (slimeA.y * areaA + slimeB.y * areaB) / combinedArea;
+        // --- BOMB LOGIC ---
+        if (slimeA.shape === 'bomb' || slimeB.shape === 'bomb') {
+          const explosionX = (slimeA.x + slimeB.x) / 2;
+          const explosionY = (slimeA.y + slimeB.y) / 2;
+          explosions.push(new Explosion(explosionX, explosionY));
 
-        const newVel = p5.Vector.add(
-          p5.Vector.mult(slimeA.vel, areaA),
-          p5.Vector.mult(slimeB.vel, areaB)
-        ).div(combinedArea);
+          mergedIndices.add(i);
+          mergedIndices.add(j);
+        } else {
+          // --- MERGE LOGIC ---
+          const areaA = PI * pow(slimeA.r, 2);
+          const areaB = PI * pow(slimeB.r, 2);
+          const combinedArea = areaA + areaB;
+          const newRadius = sqrt(combinedArea / PI);
 
-        // Color merging logic
-        const colorA = slimeA.color.levels;
-        const colorB = slimeB.color.levels;
-        const newR = (colorA[0] * areaA + colorB[0] * areaB) / combinedArea;
-        const newG = (colorA[1] * areaA + colorB[1] * areaB) / combinedArea;
-        const newB = (colorA[2] * areaA + colorB[2] * areaB) / combinedArea;
-        const newColor = color(newR, newG, newB, colorA[3]); // Keep original alpha
+          const newX = (slimeA.x * areaA + slimeB.x * areaB) / combinedArea;
+          const newY = (slimeA.y * areaA + slimeB.y * areaB) / combinedArea;
 
-        const newShape = slimeA.r > slimeB.r ? slimeA.shape : slimeB.shape;
-        newSlimes.push(new Slime(newX, newY, newRadius, newVel, newColor, newShape));
+          const newVel = p5.Vector.add(
+            p5.Vector.mult(slimeA.vel, areaA),
+            p5.Vector.mult(slimeB.vel, areaB)
+          ).div(combinedArea);
 
-        mergedIndices.add(i);
-        mergedIndices.add(j);
+          // Color merging logic
+          const colorA = slimeA.color.levels;
+          const colorB = slimeB.color.levels;
+          const newR = (colorA[0] * areaA + colorB[0] * areaB) / combinedArea;
+          const newG = (colorA[1] * areaA + colorB[1] * areaB) / combinedArea;
+          const newB = (colorA[2] * areaA + colorB[2] * areaB) / combinedArea;
+          const newColor = color(newR, newG, newB, colorA[3]); // Keep original alpha
+
+          const newShape = slimeA.r > slimeB.r ? slimeA.shape : slimeB.shape;
+          newSlimes.push(new Slime(newX, newY, newRadius, newVel, newColor, newShape));
+
+          mergedIndices.add(i);
+          mergedIndices.add(j);
+        }
       }
     }
   }
@@ -72,6 +85,15 @@ function draw() {
   for (let i = 0; i < slimes.length; i++) {
     slimes[i].move();
     slimes[i].display();
+  }
+
+  // Update and display explosions
+  for (let i = explosions.length - 1; i >= 0; i--) {
+    explosions[i].update();
+    explosions[i].display();
+    if (explosions[i].isFinished()) {
+      explosions.splice(i, 1);
+    }
   }
 }
 
@@ -261,6 +283,7 @@ class Slime {
         curveVertex(points[1].x, points[1].y);
         break;
       }
+      case 'bomb':
       case 'circle':
       default: {
         const noiseMax = 0.5;
@@ -276,6 +299,24 @@ class Slime {
       }
     }
     endShape(CLOSE);
+
+    // Draw bomb icon if the shape is 'bomb'
+    if (this.shape === 'bomb') {
+      // Bomb body
+      fill(40, 40, 40);
+      noStroke();
+      ellipse(0, -this.r * 0.9, this.r * 0.6, this.r * 0.6);
+
+      // Fuse
+      stroke(100, 80, 40);
+      strokeWeight(this.r * 0.1);
+      line(0, -this.r * 1.1, this.r * 0.1, -this.r * 1.3);
+
+      // Spark
+      fill(255, 255, 0);
+      noStroke();
+      ellipse(this.r * 0.1, -this.r * 1.3, this.r * 0.2);
+    }
 
     // Highlight - must be drawn within the transformed matrix
     fill(255, 255, 255, 100);
@@ -340,5 +381,66 @@ class Slime {
     }
 
     pop();
+  }
+}
+
+// Explosion class to manage particles
+class Explosion {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.particles = [];
+    // Create a burst of particles
+    for (let i = 0; i < 30; i++) {
+      this.particles.push(new Particle(this.x, this.y));
+    }
+  }
+
+  update() {
+    for (let particle of this.particles) {
+      particle.update();
+    }
+  }
+
+  display() {
+    for (let particle of this.particles) {
+      particle.display();
+    }
+  }
+
+  // Check if the explosion animation is finished
+  isFinished() {
+    return this.particles.every(p => p.isFinished());
+  }
+}
+
+// Particle class for the explosion effect
+class Particle {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.vel = p5.Vector.random2D().mult(random(2, 6));
+    this.lifespan = 255; // Alpha value
+    this.r = random(3, 8);
+    // Explosion colors (oranges, yellows, reds)
+    this.color = color(random(200, 255), random(50, 150), 0);
+  }
+
+  isFinished() {
+    return this.lifespan < 0;
+  }
+
+  update() {
+    this.x += this.vel.x;
+    this.y += this.vel.y;
+    this.vel.mult(0.95); // Apply friction to slow down
+    this.lifespan -= 5; // Fade out
+  }
+
+  display() {
+    noStroke();
+    // Use lifespan for alpha to fade out
+    fill(this.color.levels[0], this.color.levels[1], this.color.levels[2], this.lifespan);
+    ellipse(this.x, this.y, this.r * 2);
   }
 }
