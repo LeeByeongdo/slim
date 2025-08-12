@@ -17,9 +17,16 @@ function setup() {
 function draw() {
   background(230, 240, 255);
 
+  let mergedIndices = new Set();
+  let newSlimes = [];
+
   // Collision and merging logic
-  for (let i = slimes.length - 1; i >= 0; i--) {
-    for (let j = i - 1; j >= 0; j--) {
+  for (let i = 0; i < slimes.length; i++) {
+    for (let j = i + 1; j < slimes.length; j++) {
+      if (mergedIndices.has(i) || mergedIndices.has(j)) {
+        continue;
+      }
+
       if (slimes[i].intersects(slimes[j])) {
         const slimeA = slimes[i];
         const slimeB = slimes[j];
@@ -45,14 +52,22 @@ function draw() {
         const newColor = color(newR, newG, newB, colorA[3]); // Keep original alpha
 
         const newShape = slimeA.r > slimeB.r ? slimeA.shape : slimeB.shape;
-        slimes.push(new Slime(newX, newY, newRadius, newVel, newColor, newShape));
+        newSlimes.push(new Slime(newX, newY, newRadius, newVel, newColor, newShape));
 
-        slimes.splice(i, 1);
-        slimes.splice(j, 1);
-        return;
+        mergedIndices.add(i);
+        mergedIndices.add(j);
       }
     }
   }
+
+  // Create the next generation of slimes
+  let nextGeneration = [];
+  for (let i = 0; i < slimes.length; i++) {
+    if (!mergedIndices.has(i)) {
+      nextGeneration.push(slimes[i]);
+    }
+  }
+  slimes = nextGeneration.concat(newSlimes);
 
   for (let i = 0; i < slimes.length; i++) {
     slimes[i].move();
