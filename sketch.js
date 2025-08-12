@@ -1,6 +1,6 @@
 let slimes = [];
 let explosions = [];
-const shapes = ['circle', 'square', 'triangle', 'bomb', 'killer'];
+const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow', 'killer'];
 
 // Cannon properties
 let cannon;
@@ -220,14 +220,21 @@ class Slime {
   }
 
   move() {
-    // Generate a smoothly changing angle from Perlin noise
-    let angle = noise(this.moveOffset) * TWO_PI * 2;
-    let acc = p5.Vector.fromAngle(angle);
-    acc.setMag(0.1); // Acceleration magnitude
-
-    // Update velocity with acceleration
-    this.vel.add(acc);
-    this.vel.limit(3); // Limit max speed
+    if (this.shape === 'arrow') {
+      // Arrow slimes move towards the mouse
+      let target = createVector(mouseX, mouseY);
+      let acc = p5.Vector.sub(target, createVector(this.x, this.y));
+      acc.setMag(0.2); // Constant acceleration towards the mouse
+      this.vel.add(acc);
+      this.vel.limit(4); // Limit max speed
+    } else {
+      // Original Perlin noise movement for other shapes
+      let angle = noise(this.moveOffset) * TWO_PI * 2;
+      let acc = p5.Vector.fromAngle(angle);
+      acc.setMag(0.1);
+      this.vel.add(acc);
+      this.vel.limit(3);
+    }
 
     // Add some friction/drag to make the movement more springy
     this.vel.mult(0.99);
@@ -250,13 +257,17 @@ class Slime {
       this.x = this.r;
       this.vel.x *= -1;
     }
-
     if (this.y > height - this.r) {
       this.y = height - this.r;
       this.vel.y *= -1;
     } else if (this.y < this.r) {
       this.y = this.r;
       this.vel.y *= -1;
+    }
+    
+    // Increment noise offset for the next frame for non-arrow slimes
+    if (this.shape !== 'arrow') {
+      this.moveOffset += 0.01;
     }
   }
 
@@ -314,6 +325,32 @@ class Slime {
           p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 200), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
         });
         curveVertex(points[2].x, points[2].y);
+        for (let p of points) {
+          curveVertex(p.x, p.y);
+        }
+        curveVertex(points[0].x, points[0].y);
+        curveVertex(points[1].x, points[1].y);
+        break;
+      }
+      case 'arrow': {
+        // A more detailed shape with a distinct head and body
+        let points = [
+          createVector(this.r * 1.3, 0),             // Tip
+          createVector(0, -this.r),                  // Right head corner
+          createVector(-this.r * 0.4, -this.r * 0.5),  // Right neck
+          createVector(-this.r * 0.8, -this.r * 0.5),  // Right tail
+          createVector(-this.r * 0.8, this.r * 0.5),   // Left tail
+          createVector(-this.r * 0.4, this.r * 0.5),   // Left neck
+          createVector(0, this.r)                    // Left head corner
+        ];
+
+        points.forEach(p => {
+          p.x += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 300), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+          p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 400), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+        });
+
+        // Using curveVertex for a rounder, cuter arrow shape
+        curveVertex(points[points.length - 1].x, points[points.length - 1].y);
         for (let p of points) {
           curveVertex(p.x, p.y);
         }
