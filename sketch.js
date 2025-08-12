@@ -28,7 +28,15 @@ function draw() {
           p5.Vector.mult(slimeB.vel, areaB)
         ).div(combinedArea);
 
-        slimes.push(new Slime(newX, newY, newRadius, newVel));
+        // Color merging logic
+        const colorA = slimeA.color.levels;
+        const colorB = slimeB.color.levels;
+        const newR = (colorA[0] * areaA + colorB[0] * areaB) / combinedArea;
+        const newG = (colorA[1] * areaA + colorB[1] * areaB) / combinedArea;
+        const newB = (colorA[2] * areaA + colorB[2] * areaB) / combinedArea;
+        const newColor = color(newR, newG, newB, colorA[3]); // Keep original alpha
+
+        slimes.push(new Slime(newX, newY, newRadius, newVel, newColor));
 
         slimes.splice(i, 1);
         slimes.splice(j, 1);
@@ -59,26 +67,47 @@ function mousePressed() {
 
 // Slime class
 class Slime {
-  constructor(x, y, r, vel) {
+  constructor(x, y, r, vel, col) {
     this.x = x;
     this.y = y;
     this.r = r;
     this.vel = vel || createVector();
-    this.color = color(150, 255, 150, 180); // 연두색 베이스에 투명도 적용
+    this.color = col || color(150, 255, 150, 180); // Provide a default color
     this.noiseSeed = random(1000);
     this.moveOffset = random(1000); // For Perlin noise-based movement
   }
 
   split() {
     let newR = this.r * 0.707;
+
+    // Corrected color splitting logic based on C_parent = (C1 + C2) / 2
+    const parentR = red(this.color);
+    const parentG = green(this.color);
+    const parentB = blue(this.color);
+    const parentA = alpha(this.color);
+
+    // For each channel, pick a random value for the first slime's color.
+    // Then calculate the second slime's color to balance it out.
+    // This ensures that (r1 + r2) / 2 is as close as possible to parentR,
+    // respecting the 0-255 color boundaries.
+    const r1 = constrain(random(0, parentR * 2), 0, 255);
+    const g1 = constrain(random(0, parentG * 2), 0, 255);
+    const b1 = constrain(random(0, parentB * 2), 0, 255);
+
+    const r2 = constrain(parentR * 2 - r1, 0, 255);
+    const g2 = constrain(parentG * 2 - g1, 0, 255);
+    const b2 = constrain(parentB * 2 - b1, 0, 255);
+
+    const c1 = color(r1, g1, b1, parentA);
+    const c2 = color(r2, g2, b2, parentA);
+
     // Create new random velocities for the split slimes
     let newVel1 = p5.Vector.random2D().mult(this.vel.mag() * 1.2);
     let newVel2 = p5.Vector.random2D().mult(this.vel.mag() * 1.2);
 
     // Position the new slimes slightly apart to prevent instant merging
-    // Add a small epsilon (1) for robustness
-    let s1 = new Slime(this.x - newR - 1, this.y, newR, newVel1);
-    let s2 = new Slime(this.x + newR + 1, this.y, newR, newVel2);
+    let s1 = new Slime(this.x - newR - 1, this.y, newR, newVel1, c1);
+    let s2 = new Slime(this.x + newR + 1, this.y, newR, newVel2, c2);
 
     return [s1, s2];
   }
