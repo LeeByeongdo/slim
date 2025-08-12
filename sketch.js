@@ -78,8 +78,20 @@ class Slime {
   }
 
   split() {
-    let newR = this.r * 0.707;
+    let newR = this.r * 0.707; // r / sqrt(2) to conserve area
+    const separationSpeed = 5; // The "kick" speed
 
+    // Create a random direction for the split
+    let splitDir = p5.Vector.random2D();
+
+    // Set opposite velocities for the two new slimes
+    let newVel1 = p5.Vector.mult(splitDir, separationSpeed);
+    let newVel2 = p5.Vector.mult(splitDir, -separationSpeed);
+
+    // Position the new slimes along the split direction to prevent instant merging
+    let posOffset1 = p5.Vector.mult(splitDir, newR + 1);
+    let posOffset2 = p5.Vector.mult(splitDir, -newR - 1);
+    
     // Accurately corrected color splitting logic to preserve color on merge.
     const parentR = red(this.color);
     const parentG = green(this.color);
@@ -106,13 +118,8 @@ class Slime {
     const c1 = color(r1, g1, b1, parentA);
     const c2 = color(r2, g2, b2, parentA);
 
-    // Create new random velocities for the split slimes
-    let newVel1 = p5.Vector.random2D().mult(this.vel.mag() * 1.2);
-    let newVel2 = p5.Vector.random2D().mult(this.vel.mag() * 1.2);
-
-    // Position the new slimes slightly apart to prevent instant merging
-    let s1 = new Slime(this.x - newR - 1, this.y, newR, newVel1, c1);
-    let s2 = new Slime(this.x + newR + 1, this.y, newR, newVel2, c2);
+    let s1 = new Slime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1, c1);
+    let s2 = new Slime(this.x + posOffset2.x, this.y + posOffset2.y, newR, newVel2, c2);
 
     return [s1, s2];
   }
