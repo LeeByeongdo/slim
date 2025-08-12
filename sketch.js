@@ -70,10 +70,15 @@ class Slime {
 
   split() {
     let newR = this.r * 0.707;
-    let newVel1 = this.vel.copy().rotate(random(-0.5, 0.5)).mult(1.1);
-    let newVel2 = this.vel.copy().rotate(random(-0.5, 0.5)).mult(1.1);
-    let s1 = new Slime(this.x, this.y, newR, newVel1);
-    let s2 = new Slime(this.x, this.y, newR, newVel2);
+    // Create new random velocities for the split slimes
+    let newVel1 = p5.Vector.random2D().mult(this.vel.mag() * 1.2);
+    let newVel2 = p5.Vector.random2D().mult(this.vel.mag() * 1.2);
+
+    // Position the new slimes slightly apart to prevent instant merging
+    // Add a small epsilon (1) for robustness
+    let s1 = new Slime(this.x - newR - 1, this.y, newR, newVel1);
+    let s2 = new Slime(this.x + newR + 1, this.y, newR, newVel2);
+
     return [s1, s2];
   }
 
