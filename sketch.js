@@ -3,7 +3,7 @@ let slimes = [];
 function setup() {
   createCanvas(windowWidth, windowHeight);
   // Start with one large slime
-  slimes.push(new Slime(width / 2, height / 2, 60));
+  slimes.push(new Slime(width / 2, height / 2, 180));
 }
 
 function draw() {
@@ -64,7 +64,7 @@ class Slime {
     this.y = y;
     this.r = r;
     this.vel = vel || createVector();
-    this.color = color(100, 150, 255, 200);
+    this.color = color(150, 255, 150, 180); // 연두색 베이스에 투명도 적용
     this.noiseSeed = random(1000);
     this.moveOffset = random(1000); // For Perlin noise-based movement
   }
@@ -120,22 +120,42 @@ class Slime {
   }
 
   display() {
-    noStroke();
-    fill(this.color);
-
     push();
     translate(this.x, this.y);
+
+    // Slime body
+    noStroke();
+    fill(this.color);
     beginShape();
-    let noiseMax = 0.5;
+    const noiseMax = 0.5;
     for (let a = 0; a < TWO_PI; a += 0.1) {
-      let xoff = map(cos(a), -1, 1, 0, noiseMax);
-      let yoff = map(sin(a), -1, 1, 0, noiseMax);
-      let r = this.r + map(noise(xoff, yoff, this.noiseSeed + frameCount * 0.01), 0, 1, -this.r * 0.1, this.r * 0.1);
-      let x = r * cos(a);
-      let y = r * sin(a);
+      const xoff = map(cos(a), -1, 1, 0, noiseMax);
+      const yoff = map(sin(a), -1, 1, 0, noiseMax);
+      const r = this.r + map(noise(xoff, yoff, this.noiseSeed + frameCount * 0.01), 0, 1, -this.r * 0.1, this.r * 0.1);
+      const x = r * cos(a);
+      const y = r * sin(a);
       vertex(x, y);
     }
     endShape(CLOSE);
+
+    // Highlight
+    fill(255, 255, 255, 100);
+    noStroke();
+    arc(
+      -this.r * 0.2, // x
+      -this.r * 0.2, // y
+      this.r * 1.2,   // width
+      this.r * 1.2,   // height
+      PI + QUARTER_PI * 1.5, // start angle
+      TWO_PI - QUARTER_PI * 0.5 // end angle
+    );
+
+    // Eyes
+    fill(0);
+    const eyeSize = this.r * 0.15;
+    ellipse(-this.r * 0.25, -this.r * 0.1, eyeSize, eyeSize); // Left eye
+    ellipse(this.r * 0.25, -this.r * 0.1, eyeSize, eyeSize);  // Right eye
+
     pop();
   }
 }
