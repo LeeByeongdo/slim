@@ -110,6 +110,9 @@ class Slime {
     this.vel.add(acc);
     this.vel.limit(3); // Limit max speed
 
+    // Add some friction/drag to make the movement more springy
+    this.vel.mult(0.99);
+
     // Update position with velocity
     this.x += this.vel.x;
     this.y += this.vel.y;
@@ -130,6 +133,17 @@ class Slime {
     push();
     translate(this.x, this.y);
 
+    // Squash and stretch effect
+    const speed = this.vel.mag();
+    const angle = this.vel.heading();
+    const maxSpeed = 3; // Corresponds to vel.limit(3) in move()
+    const maxStretch = 1.35;
+    const stretch = map(speed, 0, maxSpeed, 1, maxStretch);
+    const squash = 1 / stretch;
+
+    rotate(angle);
+    scale(stretch, squash);
+
     // Slime body
     noStroke();
     fill(this.color);
@@ -145,23 +159,23 @@ class Slime {
     }
     endShape(CLOSE);
 
-    // Highlight
+    // Highlight - must be drawn within the transformed matrix
     fill(255, 255, 255, 100);
     noStroke();
     arc(
-      -this.r * 0.2, // x
-      -this.r * 0.2, // y
-      this.r * 1.2,   // width
-      this.r * 1.2,   // height
-      PI + QUARTER_PI * 1.5, // start angle
-      TWO_PI - QUARTER_PI * 0.5 // end angle
+      -this.r * 0.2,
+      -this.r * 0.2,
+      this.r * 1.2,
+      this.r * 1.2,
+      PI + QUARTER_PI * 1.5,
+      TWO_PI - QUARTER_PI * 0.5
     );
 
-    // Eyes
+    // Eyes - must be drawn within the transformed matrix
     fill(0);
     const eyeSize = this.r * 0.15;
-    ellipse(-this.r * 0.25, -this.r * 0.1, eyeSize, eyeSize); // Left eye
-    ellipse(this.r * 0.25, -this.r * 0.1, eyeSize, eyeSize);  // Right eye
+    ellipse(-this.r * 0.25, -this.r * 0.1, eyeSize, eyeSize);
+    ellipse(this.r * 0.25, -this.r * 0.1, eyeSize, eyeSize);
 
     pop();
   }
