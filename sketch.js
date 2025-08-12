@@ -206,6 +206,23 @@ class Slime {
       this.x = this.pivot.x + this.orbitalRadius * cos(this.angle);
       this.y = this.pivot.y + this.orbitalRadius * sin(this.angle);
 
+      // Wall bouncing logic for angular motion
+      if (this.x > width - this.r) {
+        this.x = width - this.r;
+        this.angle = PI - this.angle;
+      } else if (this.x < this.r) {
+        this.x = this.r;
+        this.angle = PI - this.angle;
+      }
+
+      if (this.y > height - this.r) {
+        this.y = height - this.r;
+        this.angle = TWO_PI - this.angle;
+      } else if (this.y < this.r) {
+        this.y = this.r;
+        this.angle = TWO_PI - this.angle;
+      }
+
       // To make squash and stretch work, we need to calculate a velocity vector.
       // The velocity is tangential to the circular path.
       // It's perpendicular to the vector from the pivot to the slime.
