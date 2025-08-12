@@ -63,9 +63,10 @@ class Slime {
     this.x = x;
     this.y = y;
     this.r = r;
-    this.vel = vel || p5.Vector.random2D().mult(random(2, 4));
+    this.vel = vel || createVector();
     this.color = color(100, 150, 255, 200);
     this.noiseSeed = random(1000);
+    this.moveOffset = random(1000); // For Perlin noise-based movement
   }
 
   split() {
@@ -93,11 +94,29 @@ class Slime {
   }
 
   move() {
+    // Generate a smoothly changing angle from Perlin noise
+    let angle = noise(this.moveOffset) * TWO_PI * 2;
+    let acc = p5.Vector.fromAngle(angle);
+    acc.setMag(0.1); // Acceleration magnitude
+
+    // Update velocity with acceleration
+    this.vel.add(acc);
+    this.vel.limit(3); // Limit max speed
+
+    // Update position with velocity
     this.x += this.vel.x;
     this.y += this.vel.y;
 
-    if (this.x > width - this.r || this.x < this.r) this.vel.x *= -1;
-    if (this.y > height - this.r || this.y < this.r) this.vel.y *= -1;
+    // Bounce off walls
+    if (this.x > width - this.r || this.x < this.r) {
+      this.vel.x *= -1;
+    }
+    if (this.y > height - this.r || this.y < this.r) {
+      this.vel.y *= -1;
+    }
+
+    // Increment noise offset for the next frame
+    this.moveOffset += 0.01;
   }
 
   display() {
