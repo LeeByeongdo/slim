@@ -126,7 +126,7 @@ class Slime {
     this.moveOffset = random(1000); // For Perlin noise-based movement
     this.expression = random(expressions);
     if (this.shape === 'flame') {
-      this.history = [];
+      this.particles = [];
     }
   }
 
@@ -225,40 +225,35 @@ class Slime {
     this.moveOffset += 0.01;
 
     if (this.shape === 'flame') {
-      this.history.push(createVector(this.x, this.y));
-      if (this.history.length > 20) {
-        this.history.splice(0, 1);
-      }
+      this.emitParticles();
+    }
+  }
+
+  emitParticles() {
+    // Emit a few particles each frame
+    for (let i = 0; i < 2; i++) {
+      this.particles.push(new FlameParticle(this.x, this.y));
     }
   }
 
   display() {
-    const timeFactor = frameCount * 0.01;
-
-    // Flame-specific rendering for after-trail
-    if (this.shape === 'flame' && this.history.length > 0) {
+    if (this.shape === 'flame') {
+      // Special rendering for flame as a particle system
       push();
       blendMode(ADD);
-      for (let i = 0; i < this.history.length; i++) {
-        const pos = this.history[i];
-        const trailAlpha = map(i, 0, this.history.length, 0, 100);
-        const trailSize = map(i, 0, this.history.length, this.r * 0.2, this.r * 0.8);
-
-        const flameColor = color(255, random(100, 200), 0, trailAlpha);
-        noStroke();
-        fill(flameColor);
-
-        // We need a separate push/pop here to isolate transformations for each trail particle
-        push();
-        translate(pos.x, pos.y);
-        // We can give the trail a gentle, independent rotation/flicker
-        rotate(sin((frameCount + i) * 0.1) * 0.2);
-        this.drawFlameShape(trailSize, timeFactor + i * 0.05);
-        pop();
+      for (let i = this.particles.length - 1; i >= 0; i--) {
+        let p = this.particles[i];
+        p.update();
+        p.display();
+        if (p.isDead()) {
+          this.particles.splice(i, 1);
+        }
       }
       blendMode(BLEND);
       pop();
     }
+
+    const timeFactor = frameCount * 0.01;
 
     push();
     translate(this.x, this.y);
@@ -274,14 +269,15 @@ class Slime {
     rotate(angle);
     scale(stretch, squash);
 
-    // Slime body
-    noStroke();
-    fill(this.color);
-    beginShape();
+    // Slime body (don't draw for flame slimes)
+    if (this.shape !== 'flame') {
+      noStroke();
+      fill(this.color);
+      beginShape();
 
-    const noiseFactor = 0.2;
+      const noiseFactor = 0.2;
 
-    switch (this.shape) {
+      switch (this.shape) {
       case 'square': {
         let corners = [
           createVector(-this.r, -this.r),
@@ -319,13 +315,6 @@ class Slime {
         curveVertex(points[1].x, points[1].y);
         break;
       }
-      case 'flame': {
-        // Main flame body
-        const flameColor = color(255, random(150, 255), 0, 200);
-        fill(flameColor);
-        this.drawFlameShape(this.r, timeFactor);
-        break;
-      }
       case 'bomb':
       case 'circle':
       default: {
@@ -342,6 +331,7 @@ class Slime {
       }
     }
     endShape(CLOSE);
+    }
 
     // Draw bomb icon if the shape is 'bomb'
     if (this.shape === 'bomb') {
@@ -362,16 +352,18 @@ class Slime {
     }
 
     // Highlight - must be drawn within the transformed matrix
-    fill(255, 255, 255, 100);
-    noStroke();
-    arc(
-      -this.r * 0.2,
-      -this.r * 0.2,
-      this.r * 1.2,
-      this.r * 1.2,
-      PI + QUARTER_PI * 1.5,
-      TWO_PI - QUARTER_PI * 0.5
-    );
+    if (this.shape !== 'flame') {
+      fill(255, 255, 255, 100);
+      noStroke();
+      arc(
+        -this.r * 0.2,
+        -this.r * 0.2,
+        this.r * 1.2,
+        this.r * 1.2,
+        PI + QUARTER_PI * 1.5,
+        TWO_PI - QUARTER_PI * 0.5
+      );
+    }
 
     // Face - must be drawn within the transformed matrix
     const eyeSize = this.r * 0.15;
@@ -424,29 +416,6 @@ class Slime {
     }
 
     pop();
-  }
-
-  drawFlameShape(radius, timeFactor) {
-    beginShape();
-    const noiseMax = 0.8;
-    for (let a = 0; a < TWO_PI; a += 0.1) {
-      const xoff = map(cos(a), -1, 1, 0, noiseMax);
-      const yoff = map(sin(a), -1, 1, 0, noiseMax);
-      const r = radius + map(noise(xoff, yoff, this.noiseSeed + timeFactor), 0, 1, -radius * 0.2, radius * 0.2);
-
-      // Add more pointy tops for a flame-like shape
-      let pointy = 1;
-      // Pointy top should be at the top of the shape, which is around -PI/2 or 3*PI/2
-      if (a > PI && a < TWO_PI) {
-        // Create a peak at 3*PI/2
-        pointy = 1 + (1 - abs(a - 3*PI/2) / (PI/2)) * 2;
-      }
-
-      const x = r * cos(a);
-      const y = r * sin(a) * pointy;
-      vertex(x, y);
-    }
-    endShape(CLOSE);
   }
 }
 
@@ -508,5 +477,34 @@ class Particle {
     // Use lifespan for alpha to fade out
     fill(this.color.levels[0], this.color.levels[1], this.color.levels[2], this.lifespan);
     ellipse(this.x, this.y, this.r * 2);
+  }
+}
+
+// A new particle class specifically for the flame effect
+class FlameParticle {
+  constructor(x, y) {
+    this.position = createVector(x, y);
+    this.velocity = createVector(random(-0.5, 0.5), random(-1, -0.2));
+    this.acceleration = createVector(0, -0.05); // Simulates buoyancy
+    this.lifespan = 100.0;
+    this.size = random(10, 20);
+  }
+
+  update() {
+    this.velocity.add(this.acceleration);
+    this.position.add(this.velocity);
+    this.lifespan -= 2.5;
+  }
+
+  display() {
+    noStroke();
+    // Orange/yellow/red tones
+    const flameColor = color(random(200, 255), random(100, 200), 0, this.lifespan);
+    fill(flameColor);
+    ellipse(this.position.x, this.position.y, this.size, this.size);
+  }
+
+  isDead() {
+    return this.lifespan < 0.0;
   }
 }
