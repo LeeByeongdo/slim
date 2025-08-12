@@ -1,9 +1,11 @@
 let slimes = [];
 let explosions = [];
+let flameBuffer;
 const shapes = ['circle', 'square', 'triangle', 'bomb', 'flame'];
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
+  flameBuffer = createGraphics(windowWidth, windowHeight);
   const numSlimes = 15;
   for (let i = 0; i < numSlimes; i++) {
     const radius = random(20, 50);
@@ -17,6 +19,7 @@ function setup() {
 
 function draw() {
   background(230, 240, 255);
+  flameBuffer.clear();
 
   let mergedIndices = new Set();
   let newSlimes = [];
@@ -95,6 +98,8 @@ function draw() {
       explosions.splice(i, 1);
     }
   }
+
+  image(flameBuffer, 0, 0);
 }
 
 function mousePressed() {
@@ -239,18 +244,18 @@ class Slime {
   display() {
     if (this.shape === 'flame') {
       // Special rendering for flame as a particle system
-      push();
-      blendMode(ADD);
+      flameBuffer.push();
+      flameBuffer.blendMode(ADD);
       for (let i = this.particles.length - 1; i >= 0; i--) {
         let p = this.particles[i];
         p.update();
-        p.display();
+        p.display(flameBuffer);
         if (p.isDead()) {
           this.particles.splice(i, 1);
         }
       }
-      blendMode(BLEND);
-      pop();
+      flameBuffer.blendMode(BLEND);
+      flameBuffer.pop();
     }
 
     const timeFactor = frameCount * 0.01;
@@ -496,12 +501,12 @@ class FlameParticle {
     this.lifespan -= 2.5;
   }
 
-  display() {
-    noStroke();
+  display(buffer) {
+    buffer.noStroke();
     // Orange/yellow/red tones
     const flameColor = color(random(200, 255), random(100, 200), 0, this.lifespan);
-    fill(flameColor);
-    ellipse(this.position.x, this.position.y, this.size, this.size);
+    buffer.fill(flameColor);
+    buffer.ellipse(this.position.x, this.position.y, this.size, this.size);
   }
 
   isDead() {
