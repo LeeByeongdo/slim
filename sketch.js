@@ -641,6 +641,21 @@ class KillerSlime extends Slime {
       // It's crucial to reset the line dash style so it doesn't
       // affect other drawings in the sketch.
       drawingContext.setLineDash([]);
+
+      // --- Draw Aiming Reticle on Target ---
+      noFill();
+      stroke(255, 0, 0, 200); // Use a more solid red for the reticle
+      strokeWeight(2);
+
+      const reticleSize = this.target.r * 1.5; // Make the reticle larger than the slime
+
+      // Draw a circle around the target
+      ellipse(this.target.x, this.target.y, reticleSize * 2);
+
+      // Draw crosshairs
+      line(this.target.x - reticleSize, this.target.y, this.target.x + reticleSize, this.target.y);
+      line(this.target.x, this.target.y - reticleSize, this.target.x, this.target.y + reticleSize);
+
       pop();
     }
   }
