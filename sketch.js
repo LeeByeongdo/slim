@@ -490,6 +490,7 @@ class KillerSlime extends Slime {
     this.expression = 'surprised'; // Using 'surprised' as a proxy for angry for now
     this.maxSpeed = 3; // Max speed for steering
     this.maxForce = 0.15; // Max steering force
+    this.target = null; // To keep track of the hunted slime
   }
 
   // Method to calculate a steering force towards a target
@@ -555,7 +556,7 @@ class KillerSlime extends Slime {
       }
     }
 
-    // 2. Calculate flee force from predators
+    // 2. Calculate flee force from predators and update target
     if (predators.length > 0) {
       let fleeSum = createVector();
       for (let predator of predators) {
@@ -563,11 +564,14 @@ class KillerSlime extends Slime {
       }
       fleeSum.div(predators.length); // Average the flee forces
       separationForce = fleeSum;
-    }
-
-    // 3. Calculate seek force for the closest prey
-    if (closestPrey) {
+      this.target = null; // Fleeing overrides hunting
+    } else if (closestPrey) {
+      // 3. If not fleeing, seek the closest prey
       seekForce = this.seek(createVector(closestPrey.x, closestPrey.y));
+      this.target = closestPrey; // Set the target
+    } else {
+      // No predators and no prey
+      this.target = null;
     }
 
     // 4. Weight the forces. Fleeing is more important.
@@ -611,6 +615,34 @@ class KillerSlime extends Slime {
     this.y += this.vel.y;
     this.bounceOffWalls();
     this.moveOffset += 0.01;
+  }
+
+  // Override the display method to add the hunter's gaze
+  display() {
+    // We call super.display() first to draw the slime's body and face.
+    // This happens within a push/pop matrix, so our line drawing afterwards
+    // won't be affected by the slime's rotation and scaling.
+    super.display();
+
+    // Now, draw the hunter's gaze line if a target exists.
+    // This is drawn in the main canvas coordinate system.
+    if (this.target) {
+      push();
+      // Style for the gaze line
+      stroke(255, 0, 0, 150); // Red, semi-transparent
+      strokeWeight(2);
+
+      // Use the 2D rendering context to draw a dashed line
+      drawingContext.setLineDash([8, 8]); // [dash length, gap length]
+
+      // Draw the line from this slime's center to its target's center
+      line(this.x, this.y, this.target.x, this.target.y);
+
+      // It's crucial to reset the line dash style so it doesn't
+      // affect other drawings in the sketch.
+      drawingContext.setLineDash([]);
+      pop();
+    }
   }
 }
 
