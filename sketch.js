@@ -1,8 +1,8 @@
 let slimes = [];
+const shapes = ['circle', 'square', 'triangle'];
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
-  const shapes = ['circle', 'square', 'triangle'];
   const numSlimes = 15;
   for (let i = 0; i < numSlimes; i++) {
     const radius = random(20, 50);
@@ -146,8 +146,8 @@ class Slime {
     const c1 = color(r1, g1, b1, parentA);
     const c2 = color(r2, g2, b2, parentA);
 
-    let s1 = new Slime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1, c1, this.shape);
-    let s2 = new Slime(this.x + posOffset2.x, this.y + posOffset2.y, newR, newVel2, c2, this.shape);
+    let s1 = new Slime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1, c1, random(shapes));
+    let s2 = new Slime(this.x + posOffset2.x, this.y + posOffset2.y, newR, newVel2, c2, random(shapes));
 
     return [s1, s2];
   }
