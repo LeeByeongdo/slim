@@ -408,15 +408,11 @@ class Slime {
       ellipse(this.r * 0.1, -this.r * 1.3, this.r * 0.2);
     }
 
-    // New 3D-style highlights
-    noStroke();
-    // 1. Soft top glow
-    fill(255, 255, 255, 80);
-    ellipse(-this.r * 0.15, -this.r * 0.25, this.r, this.r * 0.7);
-
-    // 2. Sharp specular highlight
-    fill(255, 255, 255, 180);
-    ellipse(this.r * 0.25, -this.r * 0.4, this.r * 0.25, this.r * 0.2);
+    // Rounded highlight
+    noFill();
+    stroke(255, 255, 255, 120); // Semi-transparent white
+    strokeWeight(this.r * 0.3); // Make it thick
+    arc(0, 0, this.r * 1.5, this.r * 1.5, -PI * 0.8, -PI * 0.2);
 
     // Face - must be drawn within the transformed matrix
     const eyeSize = this.r * 0.15;
