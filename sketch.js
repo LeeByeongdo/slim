@@ -3,7 +3,6 @@ let VerletPhysics2D, Vec2D, Rect, VerletParticle2D, VerletSpring2D, GravityBehav
 let physics;
 
 let slimes = [];
-let explosions = [];
 const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow', 'killer', 'cluster'];
 
 // Create a weighted list of shapes to make bombs 10x less likely
@@ -25,8 +24,12 @@ let cannon;
 let painterModeCheckbox;
 let isPainterMode = true;
 
+// Graphics buffer for persistent paint splatters
+let paintCanvas;
+
 function setup() {
   createCanvas(windowWidth, windowHeight);
+  paintCanvas = createGraphics(windowWidth, windowHeight);
 
   // --- Painter Mode Setup ---
   // p5.js's select() is used to get the element
@@ -77,6 +80,9 @@ function draw() {
     background(230, 240, 255);
   }
 
+  // Draw the persistent paint canvas
+  image(paintCanvas, 0, 0);
+
   // Update the physics world
   physics.update();
 
@@ -98,7 +104,8 @@ function draw() {
         if (slimeA.shape === 'bomb' || slimeB.shape === 'bomb') {
           const explosionX = (slimeA.x + slimeB.x) / 2;
           const explosionY = (slimeA.y + slimeB.y) / 2;
-          explosions.push(new Explosion(explosionX, explosionY));
+          const splatterSize = slimeA.r + slimeB.r;
+          createPaintSplatter(explosionX, explosionY, slimeA.color, slimeB.color, splatterSize);
 
           if (slimeA instanceof ClusterSlime) slimeA.destroy();
           if (slimeB instanceof ClusterSlime) slimeB.destroy();
@@ -168,18 +175,37 @@ function draw() {
     slimes[i].display();
   }
 
-  // Update and display explosions
-  for (let i = explosions.length - 1; i >= 0; i--) {
-    explosions[i].update();
-    explosions[i].display();
-    if (explosions[i].isFinished()) {
-      explosions.splice(i, 1);
-    }
-  }
-
   // Draw the cannon
   cannon.display();
 }
+
+function createPaintSplatter(x, y, c1, c2, splatterSize) {
+  const numDroplets = floor(map(splatterSize, 20, 150, 50, 400));
+  const baseRadius = splatterSize * 0.25; // The standard deviation for the splatter
+
+  // Blend the colors of the two colliding slimes
+  const splatterColor = lerpColor(c1, c2, 0.5);
+
+  paintCanvas.push();
+  paintCanvas.translate(x, y);
+  for (let i = 0; i < numDroplets; i++) {
+    // Use a Gaussian distribution for the distance from the center
+    const distance = randomGaussian(0, baseRadius);
+    const angle = random(TWO_PI);
+    const dropletX = cos(angle) * distance;
+    const dropletY = sin(angle) * distance;
+
+    // Vary the size and transparency of each droplet
+    const dropletSize = random(2, 10);
+    const dropletAlpha = random(50, 150);
+
+    paintCanvas.noStroke();
+    paintCanvas.fill(red(splatterColor), green(splatterColor), blue(splatterColor), dropletAlpha);
+    paintCanvas.ellipse(dropletX, dropletY, dropletSize, dropletSize);
+  }
+  paintCanvas.pop();
+}
+
 
 function mousePressed() {
   // Check for cannon click first
@@ -528,67 +554,6 @@ class Slime {
     }
 
     pop();
-  }
-}
-
-// Explosion class to manage particles
-class Explosion {
-  constructor(x, y) {
-    this.x = x;
-    this.y = y;
-    this.particles = [];
-    // Create a burst of particles
-    for (let i = 0; i < 30; i++) {
-      this.particles.push(new Particle(this.x, this.y));
-    }
-  }
-
-  update() {
-    for (let particle of this.particles) {
-      particle.update();
-    }
-  }
-
-  display() {
-    for (let particle of this.particles) {
-      particle.display();
-    }
-  }
-
-  // Check if the explosion animation is finished
-  isFinished() {
-    return this.particles.every(p => p.isFinished());
-  }
-}
-
-// Particle class for the explosion effect
-class Particle {
-  constructor(x, y) {
-    this.x = x;
-    this.y = y;
-    this.vel = p5.Vector.random2D().mult(random(2, 6));
-    this.lifespan = 255; // Alpha value
-    this.r = random(3, 8);
-    // Explosion colors (oranges, yellows, reds)
-    this.color = color(random(200, 255), random(50, 150), 0);
-  }
-
-  isFinished() {
-    return this.lifespan < 0;
-  }
-
-  update() {
-    this.x += this.vel.x;
-    this.y += this.vel.y;
-    this.vel.mult(0.95); // Apply friction to slow down
-    this.lifespan -= 5; // Fade out
-  }
-
-  display() {
-    noStroke();
-    // Use lifespan for alpha to fade out
-    fill(this.color.levels[0], this.color.levels[1], this.color.levels[2], this.lifespan);
-    ellipse(this.x, this.y, this.r * 2);
   }
 }
 
