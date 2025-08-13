@@ -298,97 +298,104 @@ class Slime {
     rotate(angle);
     scale(stretch, squash);
 
-    // Slime body
+    // Slime body drawing function
+    const drawSlimeShape = () => {
+      beginShape();
+      const timeFactor = frameCount * 0.01;
+      const noiseFactor = 0.4;
+
+      switch (this.shape) {
+        case 'square': {
+          let corners = [
+            createVector(-this.r, -this.r),
+            createVector(this.r, -this.r),
+            createVector(this.r, this.r),
+            createVector(-this.r, this.r)
+          ];
+          corners.forEach(c => {
+            c.x += map(noise(c.x * 0.05, c.y * 0.05, this.noiseSeed + timeFactor), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+            c.y += map(noise(c.x * 0.05, c.y * 0.05, this.noiseSeed + timeFactor + 100), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+          });
+          curveVertex(corners[3].x, corners[3].y);
+          for (let c of corners) {
+            curveVertex(c.x, c.y);
+          }
+          curveVertex(corners[0].x, corners[0].y);
+          curveVertex(corners[1].x, corners[1].y);
+          break;
+        }
+        case 'triangle': {
+          let points = [
+            createVector(0, -this.r * 1.15),
+            createVector(-this.r, this.r * 0.85),
+            createVector(this.r, this.r * 0.85)
+          ];
+          points.forEach(p => {
+            p.x += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+            p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 200), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+          });
+          curveVertex(points[2].x, points[2].y);
+          for (let p of points) {
+            curveVertex(p.x, p.y);
+          }
+          curveVertex(points[0].x, points[0].y);
+          curveVertex(points[1].x, points[1].y);
+          break;
+        }
+        case 'arrow': {
+          let points = [
+            createVector(this.r * 1.3, 0),
+            createVector(0, -this.r),
+            createVector(-this.r * 0.4, -this.r * 0.5),
+            createVector(-this.r * 0.8, -this.r * 0.5),
+            createVector(-this.r * 0.8, this.r * 0.5),
+            createVector(-this.r * 0.4, this.r * 0.5),
+            createVector(0, this.r)
+          ];
+          points.forEach(p => {
+            p.x += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 300), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+            p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 400), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+          });
+          curveVertex(points[points.length - 1].x, points[points.length - 1].y);
+          for (let p of points) {
+            curveVertex(p.x, p.y);
+          }
+          curveVertex(points[0].x, points[0].y);
+          curveVertex(points[1].x, points[1].y);
+          break;
+        }
+        case 'bomb':
+        case 'circle':
+        default: {
+          const noiseMax = 0.5;
+          for (let a = 0; a < TWO_PI; a += 0.1) {
+            const xoff = map(cos(a), -1, 1, 0, noiseMax);
+            const yoff = map(sin(a), -1, 1, 0, noiseMax);
+            const r = this.r + map(noise(xoff, yoff, this.noiseSeed + timeFactor), 0, 1, -this.r * 0.2, this.r * 0.2);
+            const x = r * cos(a);
+            const y = r * sin(a);
+            vertex(x, y);
+          }
+          break;
+        }
+      }
+      endShape(CLOSE);
+    };
+
+    // Draw outline first, then fill, to prevent stroke from crossing into the shape
     const c = this.color;
     const darkerC = color(red(c) * 0.8, green(c) * 0.8, blue(c) * 0.8, alpha(c));
+
+    // 1. Draw outline
     stroke(darkerC);
-    strokeWeight(this.r * 0.05); // A thin stroke relative to slime size
-    fill(this.color);
-    beginShape();
+    strokeWeight(this.r * 0.1); // Thicker stroke, half will be covered by fill
+    noFill();
+    drawSlimeShape();
 
-    const timeFactor = frameCount * 0.01;
-    const noiseFactor = 0.4;
-
-    switch (this.shape) {
-      case 'square': {
-        let corners = [
-          createVector(-this.r, -this.r),
-          createVector(this.r, -this.r),
-          createVector(this.r, this.r),
-          createVector(-this.r, this.r)
-        ];
-        corners.forEach(c => {
-          c.x += map(noise(c.x * 0.05, c.y * 0.05, this.noiseSeed + timeFactor), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
-          c.y += map(noise(c.x * 0.05, c.y * 0.05, this.noiseSeed + timeFactor + 100), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
-        });
-        curveVertex(corners[3].x, corners[3].y);
-        for (let c of corners) {
-          curveVertex(c.x, c.y);
-        }
-        curveVertex(corners[0].x, corners[0].y);
-        curveVertex(corners[1].x, corners[1].y);
-        break;
-      }
-      case 'triangle': {
-        let points = [
-          createVector(0, -this.r * 1.15),
-          createVector(-this.r, this.r * 0.85),
-          createVector(this.r, this.r * 0.85)
-        ];
-        points.forEach(p => {
-          p.x += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
-          p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 200), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
-        });
-        curveVertex(points[2].x, points[2].y);
-        for (let p of points) {
-          curveVertex(p.x, p.y);
-        }
-        curveVertex(points[0].x, points[0].y);
-        curveVertex(points[1].x, points[1].y);
-        break;
-      }
-      case 'arrow': {
-        // A more detailed shape with a distinct head and body
-        let points = [
-          createVector(this.r * 1.3, 0),             // Tip
-          createVector(0, -this.r),                  // Right head corner
-          createVector(-this.r * 0.4, -this.r * 0.5),  // Right neck
-          createVector(-this.r * 0.8, -this.r * 0.5),  // Right tail
-          createVector(-this.r * 0.8, this.r * 0.5),   // Left tail
-          createVector(-this.r * 0.4, this.r * 0.5),   // Left neck
-          createVector(0, this.r)                    // Left head corner
-        ];
-
-        points.forEach(p => {
-          p.x += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 300), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
-          p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 400), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
-        });
-
-        // Using curveVertex for a rounder, cuter arrow shape
-        curveVertex(points[points.length - 1].x, points[points.length - 1].y);
-        for (let p of points) {
-          curveVertex(p.x, p.y);
-        }
-        curveVertex(points[0].x, points[0].y);
-        curveVertex(points[1].x, points[1].y);
-        break;
-      }
-      case 'bomb':
-      case 'circle':
-      default: {
-        const noiseMax = 0.5;
-        for (let a = 0; a < TWO_PI; a += 0.1) {
-          const xoff = map(cos(a), -1, 1, 0, noiseMax);
-          const yoff = map(sin(a), -1, 1, 0, noiseMax);
-          const r = this.r + map(noise(xoff, yoff, this.noiseSeed + timeFactor), 0, 1, -this.r * 0.2, this.r * 0.2);
-          const x = r * cos(a);
-          const y = r * sin(a);
-          vertex(x, y);
-        }
-        break;
-      }
-    }
-    endShape(CLOSE);
+    // 2. Draw fill on top
+    noStroke();
+    fill(c);
+    drawSlimeShape();
 
     // Draw bomb icon if the shape is 'bomb'
     if (this.shape === 'bomb') {
