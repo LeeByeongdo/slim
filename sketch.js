@@ -26,7 +26,7 @@ function setup() {
     const x = random(radius, width - radius);
     const y = random(radius, height - radius);
     const shape = random(weightedShapes);
-    const col = color(random(100, 255), random(100, 255), random(100, 255), 180);
+    const col = color(random(100, 255), random(100, 255), random(100, 255), 100);
 
     if (shape === 'killer') {
       slimes.push(new KillerSlime(x, y, radius, p5.Vector.random2D().mult(2), col, shape));
@@ -139,7 +139,7 @@ function mousePressed() {
     const y = cannon.y - cannon.h / 2; // Start at the nozzle
     const vel = createVector(random(-2, 2), -12); // Shoot upwards
     const shape = random(shapes.filter(s => s !== 'bomb')); // Don't shoot bombs for now
-    const col = color(random(100, 255), random(100, 255), random(100, 255), 180);
+    const col = color(random(100, 255), random(100, 255), random(100, 255), 100);
 
     slimes.push(new Slime(x, y, radius, vel, col, shape));
     return; // Prevent further click checks
@@ -167,7 +167,7 @@ class Slime {
     this.y = y;
     this.r = r;
     this.vel = vel || createVector();
-    this.color = col || color(150, 255, 150, 180); // Provide a default color
+    this.color = col || color(150, 255, 150, 100); // Provide a default color
     this.shape = shape || 'circle'; // Add shape property
     this.noiseSeed = random(1000);
     this.moveOffset = random(1000); // For Perlin noise-based movement
@@ -304,7 +304,7 @@ class Slime {
     beginShape();
 
     const timeFactor = frameCount * 0.01;
-    const noiseFactor = 0.2;
+    const noiseFactor = 0.4;
 
     switch (this.shape) {
       case 'square': {
@@ -377,7 +377,7 @@ class Slime {
         for (let a = 0; a < TWO_PI; a += 0.1) {
           const xoff = map(cos(a), -1, 1, 0, noiseMax);
           const yoff = map(sin(a), -1, 1, 0, noiseMax);
-          const r = this.r + map(noise(xoff, yoff, this.noiseSeed + timeFactor), 0, 1, -this.r * 0.1, this.r * 0.1);
+          const r = this.r + map(noise(xoff, yoff, this.noiseSeed + timeFactor), 0, 1, -this.r * 0.2, this.r * 0.2);
           const x = r * cos(a);
           const y = r * sin(a);
           vertex(x, y);
