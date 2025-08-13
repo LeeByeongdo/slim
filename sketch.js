@@ -1,6 +1,10 @@
+// toxiclibs.js setup
+let VerletPhysics2D, Vec2D, Rect, VerletParticle2D, VerletSpring2D, GravityBehavior;
+let physics;
+
 let slimes = [];
 let explosions = [];
-const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow', 'killer'];
+const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow', 'killer', 'cluster'];
 
 // Create a weighted list of shapes to make bombs 10x less likely
 const weightedShapes = [];
@@ -19,6 +23,19 @@ let cannon;
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
+
+  // Initialize toxiclibs
+  VerletPhysics2D = toxi.physics2d.VerletPhysics2D;
+  VerletParticle2D = toxi.physics2d.VerletParticle2D;
+  VerletSpring2D = toxi.physics2d.VerletSpring2D;
+  GravityBehavior = toxi.physics2d.behaviors.GravityBehavior;
+  Vec2D = toxi.geom.Vec2D;
+  Rect = toxi.geom.Rect;
+
+  physics = new VerletPhysics2D();
+  physics.setWorldBounds(new Rect(0, 0, width, height));
+  physics.setDrag(0.0);
+
   cannon = new Cannon(); // Create the cannon instance
   const numSlimes = 15;
   for (let i = 0; i < numSlimes; i++) {
@@ -30,6 +47,8 @@ function setup() {
 
     if (shape === 'killer') {
       slimes.push(new KillerSlime(x, y, radius, p5.Vector.random2D().mult(2), col, shape));
+    } else if (shape === 'cluster') {
+      slimes.push(new ClusterSlime(x, y, radius, p5.Vector.random2D().mult(2), col));
     } else {
       slimes.push(new Slime(x, y, radius, p5.Vector.random2D().mult(2), col, shape));
     }
@@ -38,6 +57,9 @@ function setup() {
 
 function draw() {
   background(230, 240, 255);
+
+  // Update the physics world
+  physics.update();
 
   let mergedIndices = new Set();
   let newSlimes = [];
@@ -58,6 +80,9 @@ function draw() {
           const explosionX = (slimeA.x + slimeB.x) / 2;
           const explosionY = (slimeA.y + slimeB.y) / 2;
           explosions.push(new Explosion(explosionX, explosionY));
+
+          if (slimeA instanceof ClusterSlime) slimeA.destroy();
+          if (slimeB instanceof ClusterSlime) slimeB.destroy();
 
           mergedIndices.add(i);
           mergedIndices.add(j);
@@ -84,12 +109,18 @@ function draw() {
           const newB = (colorA[2] * areaA + colorB[2] * areaB) / combinedArea;
           const newColor = color(newR, newG, newB, colorA[3]); // Keep original alpha
 
-          const newShape = slimeA.r > slimeB.r ? slimeA.shape : slimeB.shape;
           const isKiller = slimeA instanceof KillerSlime || slimeB instanceof KillerSlime;
+          const isCluster = slimeA instanceof ClusterSlime || slimeB instanceof ClusterSlime;
+
+          if (slimeA instanceof ClusterSlime) slimeA.destroy();
+          if (slimeB instanceof ClusterSlime) slimeB.destroy();
 
           if (isKiller) {
             newSlimes.push(new KillerSlime(newX, newY, newRadius, newVel, newColor, 'killer'));
+          } else if (isCluster) {
+            newSlimes.push(new ClusterSlime(newX, newY, newRadius, newVel, newColor));
           } else {
+            const newShape = slimeA.r > slimeB.r ? slimeA.shape : slimeB.shape;
             newSlimes.push(new Slime(newX, newY, newRadius, newVel, newColor, newShape));
           }
 
@@ -138,20 +169,26 @@ function mousePressed() {
     const x = cannon.x;
     const y = cannon.y - cannon.h / 2; // Start at the nozzle
     const vel = createVector(random(-2, 2), -12); // Shoot upwards
-    const shape = random(shapes.filter(s => s !== 'bomb')); // Don't shoot bombs for now
+    const shape = random(shapes.filter(s => s !== 'bomb' && s !== 'killer'));
     const col = color(random(100, 255), random(100, 255), random(100, 255), 60);
 
-    slimes.push(new Slime(x, y, radius, vel, col, shape));
+    if (shape === 'cluster') {
+      slimes.push(new ClusterSlime(x, y, radius, vel, col));
+    } else {
+      slimes.push(new Slime(x, y, radius, vel, col, shape));
+    }
     return; // Prevent further click checks
   }
 
   for (let i = slimes.length - 1; i >= 0; i--) {
     if (slimes[i].isClicked(mouseX, mouseY)) {
-      if (slimes[i].r > 3.5) {
+      if (slimes[i].r > 3.5) { // A general minimum size
         let newSlimes = slimes[i].split();
-        slimes.push(newSlimes[0]);
-        slimes.push(newSlimes[1]);
-        slimes.splice(i, 1);
+        if (newSlimes && newSlimes.length > 0) {
+          slimes.push(newSlimes[0]);
+          slimes.push(newSlimes[1]);
+          slimes.splice(i, 1);
+        }
       }
       break;
     }
@@ -533,6 +570,224 @@ class Particle {
     // Use lifespan for alpha to fade out
     fill(this.color.levels[0], this.color.levels[1], this.color.levels[2], this.lifespan);
     ellipse(this.x, this.y, this.r * 2);
+  }
+}
+
+// Particle class for the cluster slime
+class ClusterParticle extends toxi.physics2d.VerletParticle2D {
+  constructor(pos) {
+    super(pos);
+    physics.addParticle(this);
+  }
+}
+
+class ClusterSlime {
+  constructor(x, y, r, vel, col) {
+    this.x = x;
+    this.y = y;
+    this.r = r;
+    this.vel = vel || createVector();
+    this.color = col || color(150, 255, 150, 60);
+    this.shape = 'cluster';
+    this.expression = random(expressions);
+
+    this.particles = [];
+    this.springs = [];
+
+    const numParticles = floor(map(r, 10, 50, 8, 16));
+    for (let i = 0; i < numParticles; i++) {
+      const angle = map(i, 0, numParticles, 0, TWO_PI);
+      const px = x + cos(angle) * r * 0.8;
+      const py = y + sin(angle) * r * 0.8;
+      let p = new ClusterParticle(new Vec2D(px, py));
+      const initialVel = new Vec2D(this.vel.x, this.vel.y);
+      p.prev.set(p.sub(initialVel));
+      this.particles.push(p);
+    }
+
+    const springStrength = 0.05;
+    for (let i = 0; i < this.particles.length; i++) {
+      for (let j = i + 1; j < this.particles.length; j++) {
+        let p1 = this.particles[i];
+        let p2 = this.particles[j];
+        let len = p1.distanceTo(p2);
+        // Connect particles that are close to each other, plus some cross-bracing
+        if (len < r * 1.5) {
+            let spring = new VerletSpring2D(p1, p2, len, springStrength);
+            this.springs.push(spring);
+            physics.addSpring(spring);
+        }
+      }
+    }
+    // Gravity is now added once in the main setup function.
+  }
+
+  calculateProperties() {
+    if (this.particles.length === 0) return;
+    let com = new Vec2D(0, 0);
+    let vel = new Vec2D(0, 0);
+    for (let p of this.particles) {
+      com.addSelf(p);
+      vel.addSelf(p.getVelocity());
+    }
+    com.scaleSelf(1.0 / this.particles.length);
+    vel.scaleSelf(1.0 / this.particles.length);
+    this.x = com.x;
+    this.y = com.y;
+    this.vel.set(vel.x, vel.y);
+
+    let maxDist = 0;
+    for (let p of this.particles) {
+      const d = p.distanceTo(com);
+      if (d > maxDist) {
+        maxDist = d;
+      }
+    }
+    this.r = maxDist;
+  }
+
+  move() {
+    this.calculateProperties();
+  }
+
+  display() {
+    push();
+    translate(this.x, this.y);
+
+    // Draw the main body
+    const c = this.color;
+    const darkerC = color(red(c) * 0.8, green(c) * 0.8, blue(c) * 0.8, alpha(c));
+
+    // Sort particles by angle to draw a smooth shape
+    let center = new Vec2D(this.x, this.y);
+    this.particles.sort((a, b) => {
+      let angleA = a.sub(center).heading();
+      if (angleA < 0) angleA += TWO_PI;
+      let angleB = b.sub(center).heading();
+      if (angleB < 0) angleB += TWO_PI;
+      return angleA - angleB;
+    });
+
+    const drawClusterShape = () => {
+        beginShape();
+        if (this.particles.length > 2) {
+            // Use curveVertex, which requires repeating the first and last points
+            curveVertex(this.particles[this.particles.length - 1].x - this.x, this.particles[this.particles.length - 1].y - this.y);
+            for (let p of this.particles) {
+                curveVertex(p.x - this.x, p.y - this.y);
+            }
+            curveVertex(this.particles[0].x - this.x, this.particles[0].y - this.y);
+            curveVertex(this.particles[1].x - this.x, this.particles[1].y - this.y);
+        }
+        endShape(CLOSE);
+    };
+
+    stroke(darkerC);
+    strokeWeight(this.r * 0.2);
+    noFill();
+    drawClusterShape();
+
+    noStroke();
+    fill(c);
+    drawClusterShape();
+
+    // Rounded highlight
+    noFill();
+    stroke(255, 255, 255, 120);
+    strokeWeight(this.r * 0.3);
+    arc(0, 0, this.r * 1.5, this.r * 1.5, -PI * 0.8, -PI * 0.2);
+
+    // Face
+    const eyeSize = this.r * 0.15;
+    const eyeY = -this.r * 0.1;
+    const leftEyeX = -this.r * 0.25;
+    const rightEyeX = this.r * 0.25;
+
+    fill(0);
+
+    switch (this.expression) {
+      case 'happy':
+        ellipse(leftEyeX, eyeY, eyeSize, eyeSize);
+        ellipse(rightEyeX, eyeY, eyeSize, eyeSize);
+        noFill();
+        stroke(0);
+        strokeWeight(this.r * 0.05);
+        arc(0, this.r * 0.1, this.r * 0.5, this.r * 0.4, 0, PI);
+        noStroke();
+        break;
+      case 'wink':
+        noFill();
+        stroke(0);
+        strokeWeight(this.r * 0.05);
+        arc(leftEyeX, eyeY, eyeSize * 0.8, eyeSize * 0.5, PI, TWO_PI);
+        noStroke();
+        fill(0);
+        ellipse(rightEyeX, eyeY, eyeSize, eyeSize);
+        break;
+      case 'surprised':
+        ellipse(leftEyeX, eyeY, eyeSize * 1.2, eyeSize * 1.2);
+        ellipse(rightEyeX, eyeY, eyeSize * 1.2, eyeSize * 1.2);
+        fill(0);
+        ellipse(0, this.r * 0.25, this.r * 0.25, this.r * 0.35);
+        break;
+      default:
+        ellipse(leftEyeX, eyeY, eyeSize, eyeSize);
+        ellipse(rightEyeX, eyeY, eyeSize, eyeSize);
+        break;
+    }
+
+    pop();
+  }
+
+  intersects(other) {
+    let d = dist(this.x, this.y, other.x, other.y);
+    return (d < this.r + other.r);
+  }
+
+  isClicked(px, py) {
+    let d = dist(px, py, this.x, this.y);
+    return (d < this.r);
+  }
+
+  split() {
+    const newArea = (PI * this.r * this.r) / 2;
+    const newR = sqrt(newArea / PI);
+
+    if (newR < 10) return [];
+
+    const separationSpeed = 5;
+    let splitDir = p5.Vector.random2D();
+    let newVel1 = p5.Vector.add(this.vel, p5.Vector.mult(splitDir, separationSpeed));
+    let newVel2 = p5.Vector.add(this.vel, p5.Vector.mult(splitDir, -separationSpeed));
+    let posOffset1 = p5.Vector.mult(splitDir, newR + 1);
+    let posOffset2 = p5.Vector.mult(splitDir, -newR - 1);
+
+    const parentR = red(this.color), parentG = green(this.color), parentB = blue(this.color), parentA = alpha(this.color);
+    const minR1 = max(0, 2 * parentR - 255), maxR1 = min(255, 2 * parentR);
+    const r1 = random(minR1, maxR1), r2 = 2 * parentR - r1;
+    const minG1 = max(0, 2 * parentG - 255), maxG1 = min(255, 2 * parentG);
+    const g1 = random(minG1, maxG1), g2 = 2 * parentG - g1;
+    const minB1 = max(0, 2 * parentB - 255), maxB1 = min(255, 2 * parentB);
+    const b1 = random(minB1, maxB1), b2 = 2 * parentB - b1;
+    const c1 = color(r1, g1, b1, parentA), c2 = color(r2, g2, b2, parentA);
+
+    let s1 = new ClusterSlime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1, c1);
+    let s2 = new ClusterSlime(this.x + posOffset2.x, this.y + posOffset2.y, newR, newVel2, c2);
+
+    this.destroy();
+
+    return [s1, s2];
+  }
+
+  destroy() {
+    for (let p of this.particles) {
+      physics.removeParticle(p);
+    }
+    for (let s of this.springs) {
+      physics.removeSpring(s);
+    }
+    this.particles = [];
+    this.springs = [];
   }
 }
 
