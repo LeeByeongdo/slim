@@ -636,11 +636,14 @@ class ClusterSlime {
     this.y = com.y;
     this.vel.set(vel.x, vel.y);
 
-    let avgDist = 0;
+    let maxDist = 0;
     for (let p of this.particles) {
-      avgDist += p.distanceTo(com);
+      const d = p.distanceTo(com);
+      if (d > maxDist) {
+        maxDist = d;
+      }
     }
-    this.r = avgDist / this.particles.length * 1.5; // Multiply by 1.5 for a more generous radius
+    this.r = maxDist;
   }
 
   move() {
