@@ -8,7 +8,7 @@ const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow', 'killer', 'clus
 // Create a weighted list of shapes to make bombs 10x less likely
 const weightedShapes = [];
 for (const shape of shapes) {
-  if (shape === 'bomb' || shape === 'killer' || shape === 'arrow') {
+  if (shape === 'killer' || shape === 'arrow') {
     weightedShapes.push(shape);
   } else {
     for (let i = 0; i < 10; i++) {
