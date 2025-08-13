@@ -23,21 +23,23 @@ let cannon;
 // Painter Mode
 let painterModeCheckbox;
 let isPainterMode = true;
+let debugModeCheckbox;
 
 // Graphics buffer for persistent paint splatters
 let paintCanvas;
+
+let flowfield;
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
   paintCanvas = createGraphics(windowWidth, windowHeight);
 
-  // --- Painter Mode Setup ---
-  // p5.js's select() is used to get the element
+  // --- UI Controls Setup ---
   painterModeCheckbox = select('#painterMode');
-  // Attach the event listener
   painterModeCheckbox.changed(() => {
     isPainterMode = painterModeCheckbox.checked();
   });
+  debugModeCheckbox = select('#debugMode');
 
   // Initialize toxiclibs
   VerletPhysics2D = toxi.physics2d.VerletPhysics2D;
@@ -51,6 +53,7 @@ function setup() {
   physics.setWorldBounds(new Rect(0, 0, width, height));
   physics.setDrag(0.0);
 
+  flowfield = new FlowField(20);
   cannon = new Cannon(); // Create the cannon instance
   const numSlimes = 15;
   for (let i = 0; i < numSlimes; i++) {
@@ -82,6 +85,19 @@ function draw() {
 
   // Draw the persistent paint canvas
   image(paintCanvas, 0, 0);
+
+  // Apply flow field force to ClusterSlime particles before updating the physics
+  for (const slime of slimes) {
+    if (slime instanceof ClusterSlime) {
+      for (const p of slime.particles) {
+        const p5pos = createVector(p.x, p.y);
+        const p5force = flowfield.lookup(p5pos);
+        p5force.mult(0.1); // Scale the force to a reasonable amount
+        const toxiForce = new Vec2D(p5force.x, p5force.y);
+        p.addForce(toxiForce);
+      }
+    }
+  }
 
   // Update the physics world
   physics.update();
@@ -166,10 +182,16 @@ function draw() {
   }
   slimes = nextGeneration.concat(newSlimes);
 
+  if (debugModeCheckbox.checked()) {
+    flowfield.display();
+  }
+
   for (let i = 0; i < slimes.length; i++) {
     if (slimes[i] instanceof KillerSlime) {
-      slimes[i].move(slimes);
-    } else {
+      slimes[i].move(slimes, flowfield);
+    } else if (slimes[i] instanceof Slime) {
+      slimes[i].move(flowfield);
+    } else { // This will be ClusterSlime
       slimes[i].move();
     }
     slimes[i].display();
@@ -254,6 +276,9 @@ class Slime {
     this.noiseSeed = random(1000);
     this.moveOffset = random(1000); // For Perlin noise-based movement
     this.expression = random(expressions);
+
+    this.maxSpeed = 3;
+    this.maxForce = 0.1;
   }
 
   split() {
@@ -313,22 +338,35 @@ class Slime {
     return (d < this.r);
   }
 
-  move() {
+  follow(flowfield) {
+    let desired = flowfield.lookup(createVector(this.x, this.y));
+    desired.mult(this.maxSpeed);
+    let steer = p5.Vector.sub(desired, this.vel);
+    steer.limit(this.maxForce);
+    return steer;
+  }
+
+  move(flowfield) {
+    let acc;
     if (this.shape === 'arrow') {
       // Arrow slimes move towards the mouse
       let target = createVector(mouseX, mouseY);
-      let acc = p5.Vector.sub(target, createVector(this.x, this.y));
+      acc = p5.Vector.sub(target, createVector(this.x, this.y));
       acc.setMag(0.2); // Constant acceleration towards the mouse
-      this.vel.add(acc);
-      this.vel.limit(4); // Limit max speed
     } else {
       // Original Perlin noise movement for other shapes
       let angle = noise(this.moveOffset) * TWO_PI * 2;
-      let acc = p5.Vector.fromAngle(angle);
+      acc = p5.Vector.fromAngle(angle);
       acc.setMag(0.1);
-      this.vel.add(acc);
-      this.vel.limit(3);
     }
+
+    if (flowfield) {
+      const flowForce = this.follow(flowfield);
+      acc.add(flowForce);
+    }
+
+    this.vel.add(acc);
+    this.vel.limit(this.shape === 'arrow' ? 4 : this.maxSpeed);
 
     // Add some friction/drag to make the movement more springy
     this.vel.mult(0.99);
@@ -884,22 +922,26 @@ class KillerSlime extends Slime {
   }
 
   // Override the move method to incorporate steering
-  move(slimes) {
-    const steeringForce = this.calculateSteering(slimes);
+  move(slimes, flowfield) {
+    let steeringForce = this.calculateSteering(slimes);
 
-    // If there's a specific target (prey or predator), use the steering force.
-    // Otherwise, use the default wandering behavior.
-    if (steeringForce.mag() > 0) {
-      this.vel.add(steeringForce);
-      this.vel.limit(this.maxSpeed);
-    } else {
-      // Wander behavior (from original Slime.move())
+    // If there's no specific target, add a wandering force
+    if (steeringForce.mag() === 0) {
       let angle = noise(this.moveOffset) * TWO_PI * 2;
-      let acc = p5.Vector.fromAngle(angle);
-      acc.setMag(0.1);
-      this.vel.add(acc);
-      this.vel.limit(3); // Keep original wander speed limit
+      let wanderForce = p5.Vector.fromAngle(angle);
+      wanderForce.setMag(0.1);
+      steeringForce.add(wanderForce);
     }
+
+    if (flowfield) {
+      const flowForce = this.follow(flowfield);
+      // Give hunting/fleeing more priority than following the field
+      flowForce.mult(0.5);
+      steeringForce.add(flowForce);
+    }
+
+    this.vel.add(steeringForce);
+    this.vel.limit(this.maxSpeed);
 
     // Common movement logic (from original Slime.move())
     this.vel.mult(0.99);
@@ -953,6 +995,58 @@ class KillerSlime extends Slime {
   }
 }
 
+// FlowField class
+class FlowField {
+  constructor(r) {
+    this.resolution = r;
+    this.cols = floor(width / this.resolution);
+    this.rows = floor(height / this.resolution);
+    this.field = new Array(this.cols);
+    for (let i = 0; i < this.cols; i++) {
+      this.field[i] = new Array(this.rows);
+    }
+    this.init();
+  }
+
+  init() {
+    noiseSeed(random(10000));
+    let xoff = 0;
+    for (let i = 0; i < this.cols; i++) {
+      let yoff = 0;
+      for (let j = 0; j < this.rows; j++) {
+        let angle = noise(xoff, yoff) * TWO_PI * 4;
+        this.field[i][j] = p5.Vector.fromAngle(angle);
+        yoff += 0.1;
+      }
+      xoff += 0.1;
+    }
+  }
+
+  display() {
+    for (let i = 0; i < this.cols; i++) {
+      for (let j = 0; j < this.rows; j++) {
+        this.drawVector(this.field[i][j], i * this.resolution, j * this.resolution, this.resolution - 2);
+      }
+    }
+  }
+
+  drawVector(v, x, y, scayl) {
+    push();
+    translate(x, y);
+    stroke(150, 100);
+    rotate(v.heading());
+    let len = v.mag() * scayl;
+    line(0, 0, len, 0);
+    pop();
+  }
+
+  lookup(lookup) {
+    let column = floor(constrain(lookup.x / this.resolution, 0, this.cols - 1));
+    let row = floor(constrain(lookup.y / this.resolution, 0, this.rows - 1));
+    return this.field[column][row].copy();
+  }
+}
+
 // Cannon class
 class Cannon {
   constructor() {
@@ -986,5 +1080,11 @@ class Cannon {
     const cannonRight = this.x + (this.w * 1.2) / 2;
 
     return (px > cannonLeft && px < cannonRight && py > cannonTop && py < cannonBottom);
+  }
+}
+
+function keyPressed() {
+  if (keyCode === 32) { // Spacebar
+    flowfield.init();
   }
 }
