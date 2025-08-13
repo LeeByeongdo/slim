@@ -21,8 +21,20 @@ for (const shape of shapes) {
 // Cannon properties
 let cannon;
 
+// Painter Mode
+let painterModeCheckbox;
+let isPainterMode = true;
+
 function setup() {
   createCanvas(windowWidth, windowHeight);
+
+  // --- Painter Mode Setup ---
+  // p5.js's select() is used to get the element
+  painterModeCheckbox = select('#painterMode');
+  // Attach the event listener
+  painterModeCheckbox.changed(() => {
+    isPainterMode = painterModeCheckbox.checked();
+  });
 
   // Initialize toxiclibs
   VerletPhysics2D = toxi.physics2d.VerletPhysics2D;
@@ -56,7 +68,14 @@ function setup() {
 }
 
 function draw() {
-  background(230, 240, 255);
+  // Conditionally set the background based on painter mode
+  if (isPainterMode) {
+    // A low alpha value creates the "trail" effect by not fully clearing the previous frame.
+    background(230, 240, 255, 30);
+  } else {
+    // The original, opaque background.
+    background(230, 240, 255);
+  }
 
   // Update the physics world
   physics.update();

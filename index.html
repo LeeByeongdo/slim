@@ -11,9 +11,26 @@
         body {
             margin: 0;
             overflow: hidden;
+            font-family: sans-serif;
+        }
+        #controls {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background-color: rgba(255, 255, 255, 0.85);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #controls label {
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
+    <div id="controls">
+        <input type="checkbox" id="painterMode" name="painterMode" checked>
+        <label for="painterMode">Painter Mode</label>
+    </div>
 </body>
 </html>
