@@ -605,7 +605,7 @@ class ClusterSlime {
       this.particles.push(p);
     }
 
-    const springStrength = 0.005;
+    const springStrength = 0.05;
     for (let i = 0; i < this.particles.length; i++) {
       for (let j = i + 1; j < this.particles.length; j++) {
         let p1 = this.particles[i];
