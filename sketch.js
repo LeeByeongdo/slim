@@ -661,7 +661,11 @@ class ClusterSlime {
     // Sort particles by angle to draw a smooth shape
     let center = new Vec2D(this.x, this.y);
     this.particles.sort((a, b) => {
-      return a.sub(center).heading() - b.sub(center).heading();
+      let angleA = a.sub(center).heading();
+      if (angleA < 0) angleA += TWO_PI;
+      let angleB = b.sub(center).heading();
+      if (angleB < 0) angleB += TWO_PI;
+      return angleA - angleB;
     });
 
     const drawClusterShape = () => {
