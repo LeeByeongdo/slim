@@ -574,7 +574,7 @@ class Particle {
 }
 
 // Particle class for the cluster slime
-class ClusterParticle extends VerletParticle2D {
+class ClusterParticle extends toxi.physics2d.VerletParticle2D {
   constructor(pos) {
     super(pos);
     physics.addParticle(this);
@@ -600,7 +600,8 @@ class ClusterSlime {
       const px = x + cos(angle) * r * 0.8;
       const py = y + sin(angle) * r * 0.8;
       let p = new ClusterParticle(new Vec2D(px, py));
-      p.setVelocity(new Vec2D(this.vel.x, this.vel.y));
+      const initialVel = new Vec2D(this.vel.x, this.vel.y);
+      p.prev.set(p.sub(initialVel));
       this.particles.push(p);
     }
 
