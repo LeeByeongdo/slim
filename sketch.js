@@ -34,7 +34,7 @@ function setup() {
 
   physics = new VerletPhysics2D();
   physics.setWorldBounds(new Rect(0, 0, width, height));
-  physics.addBehavior(new GravityBehavior(new Vec2D(0, 0.1)));
+  physics.setDrag(0.0);
 
   cannon = new Cannon(); // Create the cannon instance
   const numSlimes = 15;
