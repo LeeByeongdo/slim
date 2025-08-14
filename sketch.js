@@ -3,6 +3,7 @@ let VerletPhysics2D, Vec2D, Rect, VerletParticle2D, VerletSpring2D, GravityBehav
 let physics;
 
 let slimes = [];
+let ripples = [];
 const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow', 'killer', 'cluster', 'blackhole'];
 
 // Create a weighted list of shapes to make bombs 10x less likely
@@ -246,6 +247,15 @@ function draw() {
     slimes[i].display();
   }
 
+  // Update and display ripples
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    ripples[i].update();
+    ripples[i].display();
+    if (ripples[i].isFinished()) {
+      ripples.splice(i, 1);
+    }
+  }
+
   // Draw the cannon
   cannon.display();
 }
@@ -298,6 +308,9 @@ function mousePressed() {
 
   for (let i = slimes.length - 1; i >= 0; i--) {
     if (slimes[i].isClicked(mouseX, mouseY)) {
+      // Create a ripple effect on click
+      ripples.push(new Ripple(slimes[i].x, slimes[i].y, slimes[i].r));
+
       if (slimes[i].r > 3.5) { // A general minimum size
         let newSlimes = slimes[i].split();
         if (newSlimes && newSlimes.length > 0) {
@@ -476,6 +489,12 @@ class Slime {
     rotate(angle);
     scale(stretch, squash);
 
+    // Breathing effect for idle slimes
+    const breathingSpeed = 0.05;
+    const breathingAmount = this.r * 0.03; // Breathe by 3% of radius
+    const breathing = sin(frameCount * breathingSpeed + this.noiseSeed) * breathingAmount;
+    const displayR = this.r + (this.vel.mag() < 0.5 ? breathing : 0);
+
     // Slime body drawing function
     const drawSlimeShape = () => {
       beginShape();
@@ -485,14 +504,14 @@ class Slime {
       switch (this.shape) {
         case 'square': {
           let corners = [
-            createVector(-this.r, -this.r),
-            createVector(this.r, -this.r),
-            createVector(this.r, this.r),
-            createVector(-this.r, this.r)
+            createVector(-displayR, -displayR),
+            createVector(displayR, -displayR),
+            createVector(displayR, displayR),
+            createVector(-displayR, displayR)
           ];
           corners.forEach(c => {
-            c.x += map(noise(c.x * 0.05, c.y * 0.05, this.noiseSeed + timeFactor), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
-            c.y += map(noise(c.x * 0.05, c.y * 0.05, this.noiseSeed + timeFactor + 100), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+            c.x += map(noise(c.x * 0.05, c.y * 0.05, this.noiseSeed + timeFactor), 0, 1, -displayR * noiseFactor, displayR * noiseFactor);
+            c.y += map(noise(c.x * 0.05, c.y * 0.05, this.noiseSeed + timeFactor + 100), 0, 1, -displayR * noiseFactor, displayR * noiseFactor);
           });
           curveVertex(corners[3].x, corners[3].y);
           for (let c of corners) {
@@ -504,13 +523,13 @@ class Slime {
         }
         case 'triangle': {
           let points = [
-            createVector(0, -this.r * 1.15),
-            createVector(-this.r, this.r * 0.85),
-            createVector(this.r, this.r * 0.85)
+            createVector(0, -displayR * 1.15),
+            createVector(-displayR, displayR * 0.85),
+            createVector(displayR, displayR * 0.85)
           ];
           points.forEach(p => {
-            p.x += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
-            p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 200), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+            p.x += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor), 0, 1, -displayR * noiseFactor, displayR * noiseFactor);
+            p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 200), 0, 1, -displayR * noiseFactor, displayR * noiseFactor);
           });
           curveVertex(points[2].x, points[2].y);
           for (let p of points) {
@@ -522,17 +541,17 @@ class Slime {
         }
         case 'arrow': {
           let points = [
-            createVector(this.r * 1.3, 0),
-            createVector(0, -this.r),
-            createVector(-this.r * 0.4, -this.r * 0.5),
-            createVector(-this.r * 0.8, -this.r * 0.5),
-            createVector(-this.r * 0.8, this.r * 0.5),
-            createVector(-this.r * 0.4, this.r * 0.5),
-            createVector(0, this.r)
+            createVector(displayR * 1.3, 0),
+            createVector(0, -displayR),
+            createVector(-displayR * 0.4, -displayR * 0.5),
+            createVector(-displayR * 0.8, -displayR * 0.5),
+            createVector(-displayR * 0.8, displayR * 0.5),
+            createVector(-displayR * 0.4, displayR * 0.5),
+            createVector(0, displayR)
           ];
           points.forEach(p => {
-            p.x += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 300), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
-            p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 400), 0, 1, -this.r * noiseFactor, this.r * noiseFactor);
+            p.x += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 300), 0, 1, -displayR * noiseFactor, displayR * noiseFactor);
+            p.y += map(noise(p.x * 0.05, p.y * 0.05, this.noiseSeed + timeFactor + 400), 0, 1, -displayR * noiseFactor, displayR * noiseFactor);
           });
           curveVertex(points[points.length - 1].x, points[points.length - 1].y);
           for (let p of points) {
@@ -549,7 +568,7 @@ class Slime {
           for (let a = 0; a < TWO_PI; a += 0.1) {
             const xoff = map(cos(a), -1, 1, 0, noiseMax);
             const yoff = map(sin(a), -1, 1, 0, noiseMax);
-            const r = this.r + map(noise(xoff, yoff, this.noiseSeed + timeFactor), 0, 1, -this.r * 0.2, this.r * 0.2);
+            const r = displayR + map(noise(xoff, yoff, this.noiseSeed + timeFactor), 0, 1, -displayR * 0.2, displayR * 0.2);
             const x = r * cos(a);
             const y = r * sin(a);
             vertex(x, y);
@@ -566,7 +585,7 @@ class Slime {
 
     // 1. Draw outline
     stroke(darkerC);
-    strokeWeight(this.r * 0.1); // Thicker stroke, half will be covered by fill
+    strokeWeight(displayR * 0.1); // Thicker stroke, half will be covered by fill
     noFill();
     drawSlimeShape();
 
@@ -580,30 +599,30 @@ class Slime {
       // Bomb body
       fill(40, 40, 40);
       noStroke();
-      ellipse(0, -this.r * 0.9, this.r * 0.6, this.r * 0.6);
+      ellipse(0, -displayR * 0.9, displayR * 0.6, displayR * 0.6);
 
       // Fuse
       stroke(100, 80, 40);
-      strokeWeight(this.r * 0.1);
-      line(0, -this.r * 1.1, this.r * 0.1, -this.r * 1.3);
+      strokeWeight(displayR * 0.1);
+      line(0, -displayR * 1.1, displayR * 0.1, -displayR * 1.3);
 
       // Spark
       fill(255, 255, 0);
       noStroke();
-      ellipse(this.r * 0.1, -this.r * 1.3, this.r * 0.2);
+      ellipse(displayR * 0.1, -displayR * 1.3, displayR * 0.2);
     }
 
     // Rounded highlight
     noFill();
     stroke(255, 255, 255, 120); // Semi-transparent white
-    strokeWeight(this.r * 0.3); // Make it thick
-    arc(0, 0, this.r * 1.5, this.r * 1.5, -PI * 0.8, -PI * 0.2);
+    strokeWeight(displayR * 0.3); // Make it thick
+    arc(0, 0, displayR * 1.5, displayR * 1.5, -PI * 0.8, -PI * 0.2);
 
     // Face - must be drawn within the transformed matrix
-    const eyeSize = this.r * 0.15;
-    const eyeY = -this.r * 0.1;
-    const leftEyeX = -this.r * 0.25;
-    const rightEyeX = this.r * 0.25;
+    const eyeSize = displayR * 0.15;
+    const eyeY = -displayR * 0.1;
+    const leftEyeX = -displayR * 0.25;
+    const rightEyeX = displayR * 0.25;
 
     fill(0); // Black for eyes/mouth details
 
@@ -615,8 +634,8 @@ class Slime {
         // Smiling mouth
         noFill();
         stroke(0);
-        strokeWeight(this.r * 0.05);
-        arc(0, this.r * 0.1, this.r * 0.5, this.r * 0.4, 0, PI);
+        strokeWeight(displayR * 0.05);
+        arc(0, displayR * 0.1, displayR * 0.5, displayR * 0.4, 0, PI);
         noStroke();
         break;
 
@@ -624,7 +643,7 @@ class Slime {
         // Winking eye (left)
         noFill();
         stroke(0);
-        strokeWeight(this.r * 0.05);
+        strokeWeight(displayR * 0.05);
         arc(leftEyeX, eyeY, eyeSize * 0.8, eyeSize * 0.5, PI, TWO_PI);
         noStroke();
         // Open eye (right)
@@ -638,7 +657,7 @@ class Slime {
         ellipse(rightEyeX, eyeY, eyeSize * 1.2, eyeSize * 1.2);
         // Open mouth
         fill(0);
-        ellipse(0, this.r * 0.25, this.r * 0.25, this.r * 0.35);
+        ellipse(0, displayR * 0.25, displayR * 0.25, displayR * 0.35);
         break;
 
       case 'default':
@@ -1220,5 +1239,40 @@ class Cannon {
 function keyPressed() {
   if (keyCode === 32) { // Spacebar
     flowfield.init();
+  }
+}
+
+// Ripple class for touch feedback
+class Ripple {
+  constructor(x, y, startRadius) {
+    this.x = x;
+    this.y = y;
+    this.startRadius = startRadius; // Store the initial radius
+    this.radius = startRadius;
+    this.maxRadius = startRadius * 2.5;
+    this.lifespan = 45; // Frames
+    this.life = this.lifespan;
+  }
+
+  update() {
+    this.life--;
+    // Map the elapsed time to a linearly expanding radius
+    const elapsedTime = this.lifespan - this.life;
+    this.radius = map(elapsedTime, 0, this.lifespan, this.startRadius, this.maxRadius);
+  }
+
+  isFinished() {
+    return this.life <= 0;
+  }
+
+  display() {
+    const alpha = map(this.life, this.lifespan, 0, 150, 0);
+    const weight = map(this.life, this.lifespan, 0, 4, 0);
+    push();
+    noFill();
+    stroke(255, alpha);
+    strokeWeight(weight);
+    ellipse(this.x, this.y, this.radius * 2);
+    pop();
   }
 }
