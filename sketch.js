@@ -3,7 +3,7 @@ let VerletPhysics2D, Vec2D, Rect, VerletParticle2D, VerletSpring2D, GravityBehav
 let physics;
 
 let slimes = [];
-const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow', 'killer', 'cluster'];
+const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow', 'killer', 'cluster', 'blackhole'];
 
 // Create a weighted list of shapes to make bombs 10x less likely
 const weightedShapes = [];
@@ -116,8 +116,35 @@ function draw() {
         const slimeA = slimes[i];
         const slimeB = slimes[j];
 
+        // --- BLACK HOLE CONSUMPTION LOGIC ---
+        let blackHole = null;
+        let otherSlime = null;
+        let otherSlimeIndex = -1;
+
+        if (slimeA instanceof BlackHoleSlime && !(slimeB instanceof BlackHoleSlime)) {
+          blackHole = slimeA;
+          otherSlime = slimeB;
+          otherSlimeIndex = j;
+        } else if (slimeB instanceof BlackHoleSlime && !(slimeA instanceof BlackHoleSlime)) {
+          blackHole = slimeB;
+          otherSlime = slimeA;
+          otherSlimeIndex = i;
+        }
+
+        if (blackHole) {
+          const areaBH = PI * pow(blackHole.r, 2);
+          const areaOther = PI * pow(otherSlime.r, 2);
+          const combinedArea = areaBH + areaOther;
+          blackHole.r = sqrt(combinedArea / PI);
+
+          if (otherSlime instanceof ClusterSlime) {
+            otherSlime.destroy();
+          }
+
+          mergedIndices.add(otherSlimeIndex); // Mark the other slime for removal
+        }
         // --- BOMB LOGIC ---
-        if (slimeA.shape === 'bomb' || slimeB.shape === 'bomb') {
+        else if (slimeA.shape === 'bomb' || slimeB.shape === 'bomb') {
           const explosionX = (slimeA.x + slimeB.x) / 2;
           const explosionY = (slimeA.y + slimeB.y) / 2;
           const splatterSize = slimeA.r + slimeB.r;
@@ -184,6 +211,28 @@ function draw() {
 
   if (debugModeCheckbox.checked()) {
     flowfield.display();
+  }
+
+  // --- Black Hole Attraction Force ---
+  const blackHoles = slimes.filter(s => s instanceof BlackHoleSlime);
+  if (blackHoles.length > 0) {
+    const G = 6; // Gravitational constant - tune for effect
+    for (const bh of blackHoles) {
+      for (const slime of slimes) {
+        if (slime === bh || slime instanceof BlackHoleSlime) continue;
+
+        const force = p5.Vector.sub(createVector(bh.x, bh.y), createVector(slime.x, slime.y));
+        let distance = force.mag();
+        distance = constrain(distance, 20, 200); // Avoid extreme forces
+
+        // Using radius as a proxy for mass
+        const strength = (G * (bh.r * slime.r)) / (distance * distance);
+        force.setMag(strength);
+
+        // Apply the force directly to velocity for a strong pull
+        slime.vel.add(force);
+      }
+    }
   }
 
   for (let i = 0; i < slimes.length; i++) {
@@ -321,6 +370,15 @@ class Slime {
 
     const c1 = color(r1, g1, b1, parentA);
     const c2 = color(r2, g2, b2, parentA);
+
+    // --- Black Hole Creation on Split ---
+    const blackHoleChance = 0.1; // 10% chance
+    if (this.r > 60 && random(1) < blackHoleChance) {
+      let s1 = new Slime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1, c1, random(weightedShapes));
+      // The other becomes a black hole, stationary and black
+      let s2 = new BlackHoleSlime(this.x + posOffset2.x, this.y + posOffset2.y, newR, createVector(0, 0), color(0));
+      return [s1, s2];
+    }
 
     let s1 = new Slime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1, c1, random(weightedShapes));
     let s2 = new Slime(this.x + posOffset2.x, this.y + posOffset2.y, newR, newVel2, c2, random(weightedShapes));
@@ -794,6 +852,15 @@ class ClusterSlime {
     const c1 = color(r1, g1, b1, parentA), c2 = color(r2, g2, b2, parentA);
 
     let s1 = new ClusterSlime(this.x + posOffset1.x, this.y + posOffset1.y, newR, newVel1, c1);
+
+    // --- Black Hole Creation on Split (for ClusterSlime) ---
+    const blackHoleChance = 0.1;
+    if (this.r > 60 && random(1) < blackHoleChance) {
+      let s2 = new BlackHoleSlime(this.x + posOffset2.x, this.y + posOffset2.y, newR, createVector(0, 0), color(0));
+      this.destroy();
+      return [s1, s2];
+    }
+
     let s2 = new ClusterSlime(this.x + posOffset2.x, this.y + posOffset2.y, newR, newVel2, c2);
 
     this.destroy();
@@ -992,6 +1059,73 @@ class KillerSlime extends Slime {
 
       pop();
     }
+  }
+}
+
+class BlackHoleSlime extends Slime {
+  constructor(x, y, r, vel, col) {
+    super(x, y, r, vel, col, 'blackhole');
+    this.vel = createVector(0, 0); // Black holes don't move
+    this.particles = [];
+    this.initParticles();
+  }
+
+  initParticles() {
+    this.particles = [];
+    for (let i = 0; i < 30; i++) {
+      this.particles.push({
+        angle: random(TWO_PI),
+        dist: random(this.r, this.r * 2.5),
+        speed: random(0.01, 0.03)
+      });
+    }
+  }
+
+  // Override the move method to do nothing, keeping it stationary
+  move() {
+    // Black holes are immutable movers.
+    // We can update particle positions here though.
+    for (let p of this.particles) {
+      p.angle += p.speed;
+      // As the black hole grows, check if particles need to be reset
+      if (p.dist < this.r) {
+        p.dist = random(this.r, this.r * 2.5);
+      }
+    }
+  }
+
+  display() {
+    // Draw orbiting particles first, so they are behind the core
+    push();
+    translate(this.x, this.y);
+    for (let p of this.particles) {
+      const x = cos(p.angle) * p.dist;
+      const y = sin(p.angle) * p.dist;
+      fill(200, 200, 255, 180);
+      noStroke();
+      ellipse(x, y, 3, 3);
+    }
+    pop();
+
+    push();
+    translate(this.x, this.y);
+
+    const pulse = sin(frameCount * 0.05) * (this.r * 0.1);
+
+    // Event horizon glow
+    noStroke();
+    for (let i = 15; i > 0; i--) {
+      const radius = this.r + i * 2 + pulse;
+      const alpha = map(i, 15, 0, 0, 100);
+      fill(120, 100, 255, alpha);
+      ellipse(0, 0, radius * 2);
+    }
+
+    // Black core
+    fill(0);
+    noStroke();
+    ellipse(0, 0, this.r * 2);
+    pop();
   }
 }
 
