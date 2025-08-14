@@ -262,8 +262,9 @@ function draw() {
     if (slimes[i] instanceof KillerSlime) {
       slimes[i].move(slimes, flowfield);
     } else if (slimes[i] instanceof Slime) {
-      slimes[i].move(flowfield);
-    } else { // This will be ClusterSlime
+      // Pass the slimes array to the base Slime class for flocking
+      slimes[i].move(slimes, flowfield);
+    } else { // This will be ClusterSlime, which has its own move()
       slimes[i].move();
     }
     slimes[i].display();
@@ -465,6 +466,112 @@ class Slime {
     return (d < this.r);
   }
 
+  // --- FLOCKING BEHAVIORS ---
+
+  // Method to calculate a steering force towards the average position of local flockmates
+  cohere(slimes) {
+    let neighborDist = 100; // Increased neighbor distance for more interaction
+    let sum = createVector(0, 0);
+    let count = 0;
+    for (let other of slimes) {
+      if (other === this || other.shape === 'arrow' || other instanceof KillerSlime || other instanceof ClusterSlime || other instanceof BlackHoleSlime) continue;
+      let d = dist(this.x, this.y, other.x, other.y);
+      if (d < neighborDist) {
+        sum.add(createVector(other.x, other.y)); // Add location
+        count++;
+      }
+    }
+    if (count > 0) {
+      sum.div(count);
+      return this.seek(sum); // Steer towards the location
+    } else {
+      return createVector(0, 0);
+    }
+  }
+
+  // Method to steer towards the average heading of local flockmates
+  align(slimes) {
+    let neighborDist = 50;
+    let sum = createVector(0, 0);
+    let count = 0;
+    for (let other of slimes) {
+      if (other === this || other.shape === 'arrow' || other instanceof KillerSlime || other instanceof ClusterSlime || other instanceof BlackHoleSlime) continue;
+      let d = dist(this.x, this.y, other.x, other.y);
+      if (d < neighborDist) {
+        sum.add(other.vel);
+        count++;
+      }
+    }
+    if (count > 0) {
+      sum.div(count);
+      sum.normalize();
+      sum.mult(this.maxSpeed);
+      let steer = p5.Vector.sub(sum, this.vel);
+      steer.limit(this.maxForce);
+      return steer;
+    } else {
+      return createVector(0, 0);
+    }
+  }
+
+  // Method to steer away from crowded local flockmates
+  separate(slimes) {
+    let desiredSeparation = this.r * 2.5;
+    let steer = createVector(0, 0);
+    let count = 0;
+    for (let other of slimes) {
+      if (other === this) continue; // Don't check against self
+      let d = dist(this.x, this.y, other.x, other.y);
+      if ((d > 0) && (d < desiredSeparation)) {
+        // Calculate vector pointing away from neighbor
+        let diff = p5.Vector.sub(createVector(this.x, this.y), createVector(other.x, other.y));
+        diff.normalize();
+        diff.div(d); // Weight by distance
+        steer.add(diff);
+        count++;
+      }
+    }
+    if (count > 0) {
+      steer.div(count);
+    }
+    if (steer.mag() > 0) {
+      steer.normalize();
+      steer.mult(this.maxSpeed);
+      steer.sub(this.vel);
+      steer.limit(this.maxForce);
+    }
+    return steer;
+  }
+
+  // A method to calculate a steering force toward a target (helper for cohere)
+  seek(target) {
+    let desired = p5.Vector.sub(target, createVector(this.x, this.y));
+    desired.normalize();
+    desired.mult(this.maxSpeed);
+    let steer = p5.Vector.sub(desired, this.vel);
+    steer.limit(this.maxForce);
+    return steer;
+  }
+
+  // We accumulate a new acceleration each time based on three rules
+  flock(slimes) {
+    let sep = this.separate(slimes);
+    let ali = this.align(slimes);
+    let coh = this.cohere(slimes);
+
+    // Arbitrarily weight these forces
+    sep.mult(2.0); // Increased separation weight to prevent clumping
+    ali.mult(1.0);
+    coh.mult(1.0);
+
+    let acc = createVector(0, 0);
+    acc.add(sep);
+    acc.add(ali);
+    acc.add(coh);
+
+    return acc;
+  }
+
   follow(flowfield) {
     let desired = flowfield.lookup(createVector(this.x, this.y));
     desired.mult(this.maxSpeed);
@@ -473,22 +580,22 @@ class Slime {
     return steer;
   }
 
-  move(flowfield) {
+  move(slimes, flowfield) {
     let acc;
     if (this.shape === 'arrow') {
-      // Arrow slimes move towards the mouse
+      // Arrow slimes move towards the mouse, no flocking
       let target = createVector(mouseX, mouseY);
       acc = p5.Vector.sub(target, createVector(this.x, this.y));
-      acc.setMag(0.2); // Constant acceleration towards the mouse
+      acc.setMag(0.2);
     } else {
-      // Original Perlin noise movement for other shapes
-      let angle = noise(this.moveOffset) * TWO_PI * 2;
-      acc = p5.Vector.fromAngle(angle);
-      acc.setMag(0.1);
+      // All other non-special slimes will flock
+      acc = this.flock(slimes);
     }
 
     if (flowfield) {
       const flowForce = this.follow(flowfield);
+      // Let flocking be the primary driver, with a smaller influence from the flow field
+      flowForce.mult(0.5);
       acc.add(flowForce);
     }
 
@@ -504,7 +611,7 @@ class Slime {
 
     this.bounceOffWalls();
 
-    // Increment noise offset for the next frame
+    // This is not strictly needed for flocking but doesn't hurt
     this.moveOffset += 0.01;
   }
 
