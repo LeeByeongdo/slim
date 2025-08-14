@@ -4,6 +4,7 @@ let physics;
 
 let slimes = [];
 let ripples = [];
+let particles = [];
 const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow', 'killer', 'cluster', 'blackhole'];
 
 // Create a weighted list of shapes to make bombs 10x less likely
@@ -64,13 +65,17 @@ function setup() {
     const shape = random(weightedShapes);
     const col = color(random(100, 255), random(100, 255), random(100, 255), 60);
 
+    let newSlime;
     if (shape === 'killer') {
-      slimes.push(new KillerSlime(x, y, radius, p5.Vector.random2D().mult(2), col, shape));
+      newSlime = new KillerSlime(x, y, radius, p5.Vector.random2D().mult(2), col, shape);
     } else if (shape === 'cluster') {
-      slimes.push(new ClusterSlime(x, y, radius, p5.Vector.random2D().mult(2), col));
+      newSlime = new ClusterSlime(x, y, radius, p5.Vector.random2D().mult(2), col);
     } else {
-      slimes.push(new Slime(x, y, radius, p5.Vector.random2D().mult(2), col, shape));
+      newSlime = new Slime(x, y, radius, p5.Vector.random2D().mult(2), col, shape);
     }
+    slimes.push(newSlime);
+    // --- PARTICLE EFFECT ON BIRTH (SETUP) ---
+    spawnParticles(newSlime.x, newSlime.y, newSlime.color, floor(newSlime.r));
   }
 }
 
@@ -142,6 +147,9 @@ function draw() {
             otherSlime.destroy();
           }
 
+          // --- PARTICLE EFFECT ON DEATH (CONSUMED) ---
+          spawnParticles(otherSlime.x, otherSlime.y, otherSlime.color, floor(otherSlime.r));
+
           mergedIndices.add(otherSlimeIndex); // Mark the other slime for removal
         }
         // --- BOMB LOGIC ---
@@ -150,6 +158,10 @@ function draw() {
           const explosionY = (slimeA.y + slimeB.y) / 2;
           const splatterSize = slimeA.r + slimeB.r;
           createPaintSplatter(explosionX, explosionY, slimeA.color, slimeB.color, splatterSize);
+
+          // --- PARTICLE EFFECT ON DEATH (BOMB) ---
+          spawnParticles(slimeA.x, slimeA.y, slimeA.color, floor(slimeA.r) * 2);
+          spawnParticles(slimeB.x, slimeB.y, slimeB.color, floor(slimeB.r) * 2);
 
           if (slimeA instanceof ClusterSlime) slimeA.destroy();
           if (slimeB instanceof ClusterSlime) slimeB.destroy();
@@ -186,13 +198,23 @@ function draw() {
           if (slimeB instanceof ClusterSlime) slimeB.destroy();
 
           if (isKiller) {
-            newSlimes.push(new KillerSlime(newX, newY, newRadius, newVel, newColor, 'killer'));
+            const newSlime = new KillerSlime(newX, newY, newRadius, newVel, newColor, 'killer');
+            newSlimes.push(newSlime);
+            spawnParticles(newSlime.x, newSlime.y, newSlime.color, floor(newSlime.r));
           } else if (isCluster) {
-            newSlimes.push(new ClusterSlime(newX, newY, newRadius, newVel, newColor));
+            const newSlime = new ClusterSlime(newX, newY, newRadius, newVel, newColor);
+            newSlimes.push(newSlime);
+            spawnParticles(newSlime.x, newSlime.y, newSlime.color, floor(newSlime.r));
           } else {
             const newShape = slimeA.r > slimeB.r ? slimeA.shape : slimeB.shape;
-            newSlimes.push(new Slime(newX, newY, newRadius, newVel, newColor, newShape));
+            const newSlime = new Slime(newX, newY, newRadius, newVel, newColor, newShape);
+            newSlimes.push(newSlime);
+            spawnParticles(newSlime.x, newSlime.y, newSlime.color, floor(newSlime.r));
           }
+
+          // --- PARTICLE EFFECT ON DEATH (MERGE) ---
+          spawnParticles(slimeA.x, slimeA.y, slimeA.color, floor(slimeA.r));
+          spawnParticles(slimeB.x, slimeB.y, slimeB.color, floor(slimeB.r));
 
           mergedIndices.add(i);
           mergedIndices.add(j);
@@ -256,6 +278,15 @@ function draw() {
     }
   }
 
+  // Update and display particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    particles[i].update();
+    particles[i].display();
+    if (particles[i].isFinished()) {
+      particles.splice(i, 1);
+    }
+  }
+
   // Draw the cannon
   cannon.display();
 }
@@ -287,6 +318,17 @@ function createPaintSplatter(x, y, c1, c2, splatterSize) {
   paintCanvas.pop();
 }
 
+function spawnParticles(x, y, col, count) {
+  for (let i = 0; i < count; i++) {
+    // Make the particle color slightly transparent for a better look
+    const particleColor = color(red(col), green(col), blue(col), 150);
+    const vel = p5.Vector.random2D().mult(random(1, 6));
+    const lifespan = random(40, 90);
+    const size = random(2, 7);
+    particles.push(new Particle(x, y, vel, particleColor, size, lifespan));
+  }
+}
+
 
 function mousePressed() {
   // Check for cannon click first
@@ -298,11 +340,15 @@ function mousePressed() {
     const shape = random(shapes.filter(s => s !== 'bomb' && s !== 'killer'));
     const col = color(random(100, 255), random(100, 255), random(100, 255), 60);
 
+    let newSlime;
     if (shape === 'cluster') {
-      slimes.push(new ClusterSlime(x, y, radius, vel, col));
+      newSlime = new ClusterSlime(x, y, radius, vel, col);
     } else {
-      slimes.push(new Slime(x, y, radius, vel, col, shape));
+      newSlime = new Slime(x, y, radius, vel, col, shape);
     }
+    slimes.push(newSlime);
+    // --- PARTICLE EFFECT ON BIRTH (CANNON) ---
+    spawnParticles(newSlime.x, newSlime.y, newSlime.color, floor(newSlime.r));
     return; // Prevent further click checks
   }
 
@@ -312,10 +358,20 @@ function mousePressed() {
       ripples.push(new Ripple(slimes[i].x, slimes[i].y, slimes[i].r));
 
       if (slimes[i].r > 3.5) { // A general minimum size
-        let newSlimes = slimes[i].split();
+        const oldSlime = slimes[i];
+        let newSlimes = oldSlime.split();
         if (newSlimes && newSlimes.length > 0) {
+          // --- PARTICLE EFFECT ON DEATH (SPLIT) ---
+          spawnParticles(oldSlime.x, oldSlime.y, oldSlime.color, floor(oldSlime.r));
+
           slimes.push(newSlimes[0]);
+          // --- PARTICLE EFFECT ON BIRTH (SPLIT) ---
+          spawnParticles(newSlimes[0].x, newSlimes[0].y, newSlimes[0].color, floor(newSlimes[0].r));
+
           slimes.push(newSlimes[1]);
+          // --- PARTICLE EFFECT ON BIRTH (SPLIT) ---
+          spawnParticles(newSlimes[1].x, newSlimes[1].y, newSlimes[1].color, floor(newSlimes[1].r));
+
           slimes.splice(i, 1);
         }
       }
@@ -668,6 +724,44 @@ class Slime {
         break;
     }
 
+    pop();
+  }
+}
+
+// Particle class for effects
+class Particle {
+  constructor(x, y, vel, col, size, lifespan) {
+    this.pos = createVector(x, y);
+    this.vel = vel || p5.Vector.random2D().mult(random(1, 5)); // Default: burst outwards
+    this.acc = createVector(0, 0.05); // A little gravity
+    this.color = col;
+    this.size = size || random(3, 8);
+    this.lifespan = lifespan || 80; // Lifespan in frames
+    this.initialLifespan = this.lifespan;
+  }
+
+  update() {
+    this.vel.add(this.acc);
+    this.pos.add(this.vel);
+    this.lifespan--;
+  }
+
+  isFinished() {
+    return this.lifespan <= 0;
+  }
+
+  display() {
+    push();
+    // Fade out over time
+    const currentAlpha = alpha(this.color);
+    const newAlpha = map(this.lifespan, 0, this.initialLifespan, 0, currentAlpha);
+
+    // Create a new color object with the new alpha to avoid modifying the original
+    const displayColor = color(red(this.color), green(this.color), blue(this.color), newAlpha);
+
+    noStroke();
+    fill(displayColor);
+    ellipse(this.pos.x, this.pos.y, this.size);
     pop();
   }
 }
