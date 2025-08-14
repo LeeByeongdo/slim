@@ -572,6 +572,35 @@ class Slime {
     return acc;
   }
 
+  // Method to keep slimes within the canvas bounds
+  boundaries() {
+    let desired = null;
+    const d = 80; // Increased margin for smoother turning
+
+    if (this.x < d) {
+      desired = createVector(this.maxSpeed, this.vel.y);
+    } else if (this.x > width - d) {
+      desired = createVector(-this.maxSpeed, this.vel.y);
+    }
+
+    if (this.y < d) {
+      desired = createVector(this.vel.x, this.maxSpeed);
+    } else if (this.y > height - d) {
+      desired = createVector(this.vel.x, -this.maxSpeed);
+    }
+
+    if (desired !== null) {
+      desired.normalize();
+      desired.mult(this.maxSpeed);
+      let steer = p5.Vector.sub(desired, this.vel);
+      // Give this force a higher priority than others
+      steer.limit(this.maxForce * 1.5);
+      return steer;
+    } else {
+      return createVector(0, 0);
+    }
+  }
+
   follow(flowfield) {
     let desired = flowfield.lookup(createVector(this.x, this.y));
     desired.mult(this.maxSpeed);
@@ -590,6 +619,10 @@ class Slime {
     } else {
       // All other non-special slimes will flock
       acc = this.flock(slimes);
+
+      // Add a strong force to avoid walls, overriding flocking if necessary
+      const boundaryForce = this.boundaries();
+      acc.add(boundaryForce);
     }
 
     if (flowfield) {
@@ -609,32 +642,12 @@ class Slime {
     this.x += this.vel.x;
     this.y += this.vel.y;
 
-    this.bounceOffWalls();
+    // Failsafe to keep slimes on screen, in case the steering behavior isn't enough
+    this.x = constrain(this.x, 0 + this.r, width - this.r);
+    this.y = constrain(this.y, 0 + this.r, height - this.r);
 
     // This is not strictly needed for flocking but doesn't hurt
     this.moveOffset += 0.01;
-  }
-
-  bounceOffWalls() {
-    if (this.x > width - this.r) {
-      this.x = width - this.r;
-      this.vel.x *= -1;
-    } else if (this.x < this.r) {
-      this.x = this.r;
-      this.vel.x *= -1;
-    }
-    if (this.y > height - this.r) {
-      this.y = height - this.r;
-      this.vel.y *= -1;
-    } else if (this.y < this.r) {
-      this.y = this.r;
-      this.vel.y *= -1;
-    }
-    
-    // Increment noise offset for the next frame for non-arrow slimes
-    if (this.shape !== 'arrow') {
-      this.moveOffset += 0.01;
-    }
   }
 
   display() {
