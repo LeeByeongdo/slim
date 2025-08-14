@@ -1,11 +1,11 @@
 // toxiclibs.js setup
-let VerletPhysics2D, Vec2D, Rect, VerletParticle2D, VerletSpring2D, GravityBehavior;
+let VerletPhysics2D, Vec2D, Rect, VerletParticle2D, VerletSpring2D, GravityBehavior, AttractionBehavior;
 let physics;
 
 let slimes = [];
 let ripples = [];
 let particles = [];
-const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow', 'killer', 'cluster', 'blackhole'];
+const shapes = ['circle', 'square', 'triangle', 'bomb', 'arrow', 'killer', 'cluster', 'blackhole', 'magnetic'];
 
 // Create a weighted list of shapes to make bombs 10x less likely
 const weightedShapes = [];
@@ -32,6 +32,21 @@ let paintCanvas;
 
 let flowfield;
 
+function createSlimeByType(shape, x, y, r, vel, col) {
+    switch (shape) {
+        case 'killer':
+            return new KillerSlime(x, y, r, vel, col, shape);
+        case 'cluster':
+            return new ClusterSlime(x, y, r, vel, col);
+        case 'magnetic':
+            return new MagneticSlime(x, y, r, vel, col);
+        // 'blackhole' is created specially, not randomly.
+        // So the default case handles 'circle', 'square', 'triangle', etc.
+        default:
+            return new Slime(x, y, r, vel, col, shape);
+    }
+}
+
 function setup() {
   createCanvas(windowWidth, windowHeight);
   paintCanvas = createGraphics(windowWidth, windowHeight);
@@ -48,6 +63,7 @@ function setup() {
   VerletParticle2D = toxi.physics2d.VerletParticle2D;
   VerletSpring2D = toxi.physics2d.VerletSpring2D;
   GravityBehavior = toxi.physics2d.behaviors.GravityBehavior;
+  AttractionBehavior = toxi.physics2d.behaviors.AttractionBehavior;
   Vec2D = toxi.geom.Vec2D;
   Rect = toxi.geom.Rect;
 
@@ -65,14 +81,7 @@ function setup() {
     const shape = random(weightedShapes);
     const col = color(random(100, 255), random(100, 255), random(100, 255), 60);
 
-    let newSlime;
-    if (shape === 'killer') {
-      newSlime = new KillerSlime(x, y, radius, p5.Vector.random2D().mult(2), col, shape);
-    } else if (shape === 'cluster') {
-      newSlime = new ClusterSlime(x, y, radius, p5.Vector.random2D().mult(2), col);
-    } else {
-      newSlime = new Slime(x, y, radius, p5.Vector.random2D().mult(2), col, shape);
-    }
+    const newSlime = createSlimeByType(shape, x, y, radius, p5.Vector.random2D().mult(2), col);
     slimes.push(newSlime);
     // --- PARTICLE EFFECT ON BIRTH (SETUP) ---
     spawnParticles(newSlime.x, newSlime.y, newSlime.color, floor(newSlime.r));
@@ -340,12 +349,7 @@ function mousePressed() {
     const shape = random(shapes.filter(s => s !== 'bomb' && s !== 'killer'));
     const col = color(random(100, 255), random(100, 255), random(100, 255), 60);
 
-    let newSlime;
-    if (shape === 'cluster') {
-      newSlime = new ClusterSlime(x, y, radius, vel, col);
-    } else {
-      newSlime = new Slime(x, y, radius, vel, col, shape);
-    }
+    const newSlime = createSlimeByType(shape, x, y, radius, vel, col);
     slimes.push(newSlime);
     // --- PARTICLE EFFECT ON BIRTH (CANNON) ---
     spawnParticles(newSlime.x, newSlime.y, newSlime.color, floor(newSlime.r));
@@ -1241,6 +1245,51 @@ class BlackHoleSlime extends Slime {
     pop();
   }
 }
+
+class MagneticSlime extends ClusterSlime {
+  constructor(x, y, r, vel, col) {
+    // For visual distinction, let's give it a specific color, like a metallic gray
+    const magneticColor = color(180, 180, 190, 80);
+    super(x, y, r, vel, magneticColor);
+    this.shape = 'magnetic';
+
+    // Add repulsion behavior to each particle in the cluster
+    const repulsionRadius = this.r * 4; // The force will be felt within this distance
+    const repulsionStrength = -2.0;     // A strong repulsive force
+
+    for (let p of this.particles) {
+      physics.addBehavior(new AttractionBehavior(p, repulsionRadius, repulsionStrength));
+    }
+  }
+
+  // I can override the display method to add some extra visual flair,
+  // like little electricity sparks.
+  display() {
+    // First, call the parent's display method to draw the main body
+    super.display();
+
+    // Now, add the sparks. This is drawn outside the parent's push/pop transform matrix
+    // so it uses global coordinates.
+    push();
+    if (frameCount % 3 < 2) { // Animate the sparks
+        for (let i = 0; i < 3; i++) {
+            const angle = random(TWO_PI);
+            const dist1 = this.r;
+            const dist2 = this.r * random(1.1, 1.4);
+            const startX = this.x + cos(angle) * dist1;
+            const startY = this.y + sin(angle) * dist1;
+            const endX = this.x + cos(angle) * dist2;
+            const endY = this.y + sin(angle) * dist2;
+
+            stroke(255, 255, 100, 150); // Yellow sparks
+            strokeWeight(random(1, 2.5));
+            line(startX, startY, endX, endY);
+        }
+    }
+    pop();
+  }
+}
+
 
 // FlowField class
 class FlowField {
